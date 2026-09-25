@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pdfplumber
+pypdfium2
+rapidocr-onnxruntime
+numpy
+pillow
+openpyxl

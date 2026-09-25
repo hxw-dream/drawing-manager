@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工程图纸文件管理</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>📐 工程图纸文件管理</h1>
+  <nav><a href="versions.html"><button>版本对比</button></a><a href="inventory.html"><button>图纸清册</button></a></nav>
+  <div id="scanbox">
+    <input id="root" placeholder="图纸根目录，如 D:\图纸库（扫描其下所有含 -ML 目录文件的册）">
+    <button id="scanBtn" class="primary">扫描入库</button>
+    <button id="volBtn">册列表</button>
+  </div>
+</header>
+<main>
+  <div id="scanstatus"></div>
+  <div id="scanissues"></div>
+  <div id="searchrow">
+    <input id="q" placeholder="搜图号、图名、册名、文件名… 字词不必连续，如：取水照明 / 泵房布置" autofocus>
+    <button id="searchBtn" class="primary">搜索</button>
+  </div>
+  <div id="results"><div class="empty">输入关键字搜索，或先在上方填入根目录「扫描入库」。</div></div>
+</main>
+<script src="app.js?v=3"></script>
+</body>
+</html>
