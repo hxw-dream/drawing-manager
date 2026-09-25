@@ -99,10 +99,6 @@ def scan_volume(conn, folder: str, log):
         row["parse_status"] = "empty"
         row["parse_error"] = "文件夹内没有 -ML 目录文件，无法解析目录条目"
         log(f"  [skip] {folder_name}: 未找到 -ML 目录文件")
-    elif Path(ml_files[0]).suffix.lower() != ".pdf":
-        row["parse_status"] = "dwg_unsupported"
-        row["parse_error"] = f"ML 是 {Path(ml_files[0]).suffix}，暂只支持 PDF（DWG 走 ODA 转换，二期）"
-        log(f"  [dwg ] {folder_name}: ML 非 PDF，跳过解析")
     else:
         try:
             parsed = parse_ml(os.path.join(folder, ml_files[0]))

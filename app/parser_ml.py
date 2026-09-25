@@ -9,6 +9,7 @@ raw_text 全文保留，即使列解析失败也能被关键字搜索命中。
 """
 import logging
 import re
+from pathlib import Path
 
 from .versioning import normalize_no
 
@@ -138,8 +139,12 @@ def _label_value(boxes, labels, exclude_labels):
     return cands[0][2] if cands else None
 
 
-def _parse_ocr_boxes(boxes):
-    """锚点法解析表格行：图号框为行锚，按 y 分带归拢同行其他文本。"""
+def _parse_ocr_boxes(boxes, x_margin=100.0):
+    """锚点法解析表格行：图号框为行锚，按 y 分带归拢同行其他文本。
+
+    x_margin：丢弃最左侧边缘小字的阈值（扫描图有图框边噪声设 100；
+    DXF 提取的矢量文字无噪声，设 0）。
+    """
     entries, header = [], {}
     right_bands, table_top = _detect_columns(boxes)
     anchors = sorted(
@@ -157,7 +162,7 @@ def _parse_ocr_boxes(boxes):
             bottom = a["y1"] + 90  # 末行下限，避免把页脚 NOTE 收进来
         row = [b for b in boxes
                if b is not a and top <= b["cy"] < bottom and (b["y1"] - b["y0"]) < 90
-               and b["x0"] > 100]
+               and b["x0"] > x_margin]
         no = _norm_token(a["text"])
         entry = {"drawing_no": no, "seq": None, "title": [], "rev": None,
                  "piece": None, "page": None, "remark": []}
@@ -185,10 +190,11 @@ def _parse_ocr_boxes(boxes):
                                             "APPROVED", "REVIEWED", "DESIGNED"]
     header["project"] = _label_value(boxes, LABEL_PROJECT, excl)
     header["volume_name"] = _label_value(boxes, LABEL_VOLNAME, excl)
-    m = re.search(r"\d{1,4}-[A-Z][A-Z0-9]*-[A-Z0-9]+(?!\d)",
-                  _norm_token(" ".join(b["text"] for b in boxes)))
-    if m:
-        header["volume_ref_no"] = m.group(0)
+    for b in boxes:  # 卷册参考号按框单独匹配，避免跨行正则串字
+        t = _norm_token(b["text"])
+        if re.fullmatch(r"\d{1,4}-[A-Z][A-Z0-9]*-[A-Z0-9]+", t):
+            header["volume_ref_no"] = t
+            break
     return entries, header
 
 
@@ -250,10 +256,47 @@ def parse_ml_pdf_ocr(path: str):
             "raw_text": "\n".join(raw_lines), "method": "ocr"}
 
 
+def parse_ml_dwg(path: str):
+    """路径3：DWG/DXF 目录文件 → ODA 转 DXF → 提取文字实体 → 行解析。"""
+    import tempfile
+    import shutil
+
+    from . import dwg as dwg_mod
+
+    ext = Path(path).suffix.lower()
+    tmp = tempfile.mkdtemp(prefix="dwgml_")
+    try:
+        if ext == ".dxf":
+            dxf = path
+        else:
+            dxf = dwg_mod.dwg_to_dxf(path, tmp)
+        boxes = dwg_mod.parse_dxf_entities(dxf)
+        # DXF 是毫米级模型坐标，归一化到图像尺度，行解析的边距过滤才有意义
+        xmax = max((b["x1"] for b in boxes), default=0)
+        if xmax > 0:
+            k = 2000.0 / xmax
+            for b in boxes:
+                b["x0"] *= k
+                b["x1"] *= k
+                b["y0"] *= k
+                b["y1"] *= k
+                b["cy"] *= k
+        entries, header = _parse_ocr_boxes(boxes, x_margin=0)
+        raw_text = "\n".join(b["text"] for b in boxes)
+        return {"entries": entries, "header": header,
+                "raw_text": raw_text, "method": "dwg"}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def parse_ml(path: str):
-    """解析 ML 文件，自动选文字层或 OCR 路径。"""
-    result = parse_ml_pdf_text(path)
-    if result is None or not result["entries"]:
-        result = parse_ml_pdf_ocr(path)
+    """解析 ML 文件：PDF 走文字层/OCR，DWG/DXF 走 ODA 转换管道。"""
+    ext = Path(path).suffix.lower()
+    if ext in (".dwg", ".dxf"):
+        result = parse_ml_dwg(path)
+    else:
+        result = parse_ml_pdf_text(path)
+        if result is None or not result["entries"]:
+            result = parse_ml_pdf_ocr(path)
     result["parse_status"] = "ok" if result["entries"] else "empty"
     return result
