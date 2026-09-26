@@ -159,8 +159,22 @@ async function startScan() {
   try {
     await api("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" },
                              body: JSON.stringify({ root }) });
-    pollTimer = setInterval(pollScan, 800);
-  } catch (e) { alert("启动扫描失败: " + e.message); }
+  } catch (e) {
+    const msg = String(e.message || "");
+    if (msg.includes("进行中")) {          // 已有扫描在跑：直接跟进进度，不算失败
+      pollScan();
+      pollTimer = setInterval(pollScan, 800);
+      return;
+    }
+    if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+      alert("无法连接本地服务：请双击项目里的 run.bat 启动服务（保持窗口开着），再点扫描。");
+      return;
+    }
+    alert("启动扫描失败: " + msg);
+    return;
+  }
+  pollScan();
+  pollTimer = setInterval(pollScan, 800);
 }
 
 async function showVolumes() {
