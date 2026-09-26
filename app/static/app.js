@@ -177,26 +177,9 @@ async function startScan() {
   pollTimer = setInterval(pollScan, 800);
 }
 
-async function showVolumes() {
-  const vols = await api("/api/volumes");
-  const box = $("#results");
-  if (!vols.length) { box.innerHTML = `<div class="empty">索引为空，请先扫描入库。</div>`; return; }
-  box.innerHTML = `<div class="section-title">已入库的册（${vols.length}）</div>` + vols.map(v => `
-    <div class="card">
-      <h3>${esc(v.title || v.folder_name)} ${v.code ? `<span class="badge">${esc(v.code)}</span>` : ""}</h3>
-      <div>${verMeta(v, [`${v.entry_count} 条目录 / ${v.file_count} 个文件`,
-        v.parse_status !== "ok" ? `<span class="badge rev">${esc(v.parse_status)}</span>` : ""])}</div>
-      <div class="path">📁 ${esc(v.folder_path)}</div>
-      ${v.ml_file ? `<div class="fileline"><span class="fname">📑 目录文件: ${esc(v.ml_file)}</span><span class="actions" data-path="${esc(v.ml_path || (v.folder_path + '\\' + v.ml_file))}"></span></div>` : ""}
-      <div class="fileline"><span class="actions" data-path="${esc(v.folder_path)}" data-openfolder="1"></span></div>
-    </div>`).join("");
-  bindActionButtons();
-}
-
 $("#searchBtn").onclick = doSearch;
 $("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 $("#scanBtn").onclick = startScan;
-$("#volBtn").onclick = showVolumes;
 
 api("/api/scan/status").then(st => {
   if (st.last_root) { $("#root").value = st.last_root; $("#root").size = $("#root").value.length; }

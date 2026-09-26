@@ -79,7 +79,7 @@ def _match_files_to_entries(entries, files_rows):
             f["matched_entry_id"] = hit["_id"]
 
 
-def scan_volume(conn, folder: str, log):
+def scan_volume(conn, folder: str, log, root=None):
     folder_name = os.path.basename(folder.rstrip("\\/"))
     code, title, date_tag, rev_tag = parse_folder_name(folder_name)
     names = sorted(os.listdir(folder))
@@ -90,7 +90,7 @@ def scan_volume(conn, folder: str, log):
         "folder_path": folder, "folder_name": folder_name, "code": code,
         "title": title, "date_tag": date_tag, "rev_tag": rev_tag,
         "project": None, "volume_ref_no": None,
-        "ml_file": ml_files[0] if ml_files else None,
+        "ml_file": ml_files[0] if ml_files else None, "scan_root": root,
         "parse_status": "failed", "parse_method": "none", "parse_error": None,
         "ml_raw_text": None, "scanned_at": time.time(),
     }
@@ -117,6 +117,9 @@ def scan_volume(conn, folder: str, log):
             if not row["code"] and row["volume_ref_no"]:
                 row["code"] = re.sub(r"[（(]\d+[）)]", "",
                                      normalize_no(row["volume_ref_no"]).rsplit("-", 1)[-1])
+            # 纯图号命名的文件夹（如内层 "D0406"）不会把图号本身当修订标记
+            if row["rev_tag"] and row["code"] and row["rev_tag"].upper() == row["code"]:
+                row["rev_tag"] = None
             if entries:
                 log(f"  [ok  ] {folder_name}: {len(entries)} 条 ({parsed['method']})")
             else:
@@ -131,10 +134,10 @@ def scan_volume(conn, folder: str, log):
         conn.execute("DELETE FROM volumes WHERE id=?", (old["id"],))
     cur = conn.execute(
         """INSERT INTO volumes(folder_path,folder_name,code,title,date_tag,rev_tag,
-           project,volume_ref_no,ml_file,parse_status,parse_method,parse_error,
+           project,volume_ref_no,ml_file,scan_root,parse_status,parse_method,parse_error,
            ml_raw_text,scanned_at)
            VALUES(:folder_path,:folder_name,:code,:title,:date_tag,:rev_tag,
-           :project,:volume_ref_no,:ml_file,:parse_status,:parse_method,:parse_error,
+           :project,:volume_ref_no,:ml_file,:scan_root,:parse_status,:parse_method,:parse_error,
            :ml_raw_text,:scanned_at)""", row)
     vid = cur.lastrowid
     entry_rows = []
@@ -205,7 +208,7 @@ def scan_root(root: str, log=print):
     with db.connect() as conn:
         for folder in sorted(targets):
             try:
-                v = scan_volume(conn, folder, log)
+                v = scan_volume(conn, folder, log, root=root)
             except Exception as ex:
                 v = {"folder": folder, "status": "failed", "entries": 0, "files": 0,
                      "unmatched": [], "reason": f"{type(ex).__name__}: {ex}",
@@ -220,6 +223,11 @@ def scan_root(root: str, log=print):
                 report["fail"] += 1
             else:
                 report["warn"] += 1
+        # 旧数据回填：本根目录下尚未记录来源的册补上 scan_root
+        for r in conn.execute(
+                "SELECT id, folder_path FROM volumes WHERE scan_root IS NULL").fetchall():
+            if r["folder_path"].startswith(root + os.sep):
+                conn.execute("UPDATE volumes SET scan_root=? WHERE id=?", (root, r["id"]))
         # 清理磁盘上已不存在的册（不限当前根目录，索引始终反映磁盘现状）
         gone = purge_missing_volumes(conn)
         report["removed_missing"] = len(gone)

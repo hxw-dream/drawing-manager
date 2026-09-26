@@ -4,6 +4,7 @@
 覆盖电气专业常见类别：设计说明、材料清册、防雷接地、电缆敷设、
 照明安装、配电装置、电气接线、布置安装图。
 """
+import os
 import re
 from collections import Counter
 from datetime import datetime
@@ -68,10 +69,11 @@ def build_inventory(conn):
         "SELECT volume_id, COUNT(*) FROM files GROUP BY volume_id").fetchall())
     vols = {}
     for vr in conn.execute(
-            "SELECT id, code, title, folder_name, folder_path FROM volumes").fetchall():
+            "SELECT id, code, title, folder_name, folder_path, scan_root FROM volumes").fetchall():
         vols[vr["folder_path"]] = {
             "code": vr["code"], "title": vr["title"] or vr["folder_name"],
-            "path": vr["folder_path"], "entries": entry_counts.get(vr["id"], 0),
+            "path": vr["folder_path"], "scan_root": vr["scan_root"],
+            "entries": entry_counts.get(vr["id"], 0),
             "files": file_counts.get(vr["id"], 0)}
     order = {c: n for n, c in enumerate(CATEGORY_ORDER)}
     items.sort(key=lambda i: (order.get(i["category"], 99), i["code"] or "", i["drawing_no"]))
@@ -87,6 +89,7 @@ def make_xlsx(inv) -> bytes:
     from openpyxl.utils import get_column_letter
 
     wb = Workbook()
+    wb.remove(wb.active)  # 去掉默认空表，工作表全部按导入文件夹生成
     head_font = Font(bold=True, color="FFFFFF")
     head_fill = PatternFill("solid", fgColor="0F62D6")
     bold = Font(bold=True)
@@ -104,47 +107,62 @@ def make_xlsx(inv) -> bytes:
     def natural_code(code):
         return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", code or "")]
 
-    # ---- Sheet 1: 图纸清册（参考 ZX 格式：每册一行，图册号升序，相邻同类合并块）----
-    ws = wb.active
-    ws.title = "图纸清册"
-    cols = ["序号", "图册号", "卷册名称", "类别", "图纸张数", "版本文件数",
-            "已完成", "已核对", "备注"]
-    ws.append(cols)
-    style_header(ws, len(cols))
-    vols = sorted((dict(v, category=categorize(v["title"])) for v in inv["volumes"]),
-                  key=lambda v: natural_code(v["code"]))
-    total_entries = sum(v["entries"] for v in vols)
-    total_files = sum(v["files"] for v in vols)
-    ws.cell(row=1, column=7).value = "已完成"
-    ws.cell(row=1, column=8).value = "已核对"
-    ws.cell(row=1, column=5).value = f"图纸张数\n合计 {total_entries}"
-    ws.cell(row=1, column=6).value = f"版本文件数\n合计 {total_files}"
-    for c in (5, 6):
-        ws.cell(row=1, column=c).alignment = Alignment(
-            horizontal="center", vertical="center", wrap_text=True)
-    runs = []  # 相邻同类行组成的块：[类别, 起始行, 结束行]
-    for n, v in enumerate(vols, 1):
-        ws.append([n, v["code"] or "", v["title"], None,
-                   v["entries"], v["files"], None, None, None])
-        if runs and runs[-1][0] == v["category"]:
-            runs[-1][2] = n + 1
-        else:
-            runs.append([v["category"], n + 1, n + 1])
-    for cat, r0, r1 in runs:
-        if r1 > r0:
-            ws.merge_cells(start_row=r0, start_column=4, end_row=r1, end_column=4)
-        cell = ws.cell(row=r0, column=4)
-        cell.value = f"{cat}\n{r1 - r0 + 1}"
-        cell.font = bold
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    last = ws.max_row
-    for r in range(1, last + 1):
-        for c in range(1, len(cols) + 1):
-            ws.cell(row=r, column=c).border = border
-    for c, w in zip(range(1, 10), [6, 12, 40, 12, 11, 12, 8, 8, 14]):
-        ws.column_dimensions[get_column_letter(c)].width = w
+    def sheet_name_for(path, used):
+        name = re.sub(r"[\\/:*?\[\]]", "_",
+                      os.path.basename(path.rstrip("\\/")) if path else "未分组")[:28] or "未分组"
+        base, n = name, 2
+        while name in used:
+            name = f"{base}({n})"
+            n += 1
+        used.add(name)
+        return name
 
-    # ---- Sheet 2: 图纸明细（逐张）----
+    def write_register_sheet(ws, vols):
+        """ZX 样式清册表：每册一行、图册号升序、相邻同类合并块。"""
+        cols = ["序号", "图册号", "卷册名称", "类别", "图纸张数", "版本文件数",
+                "已完成", "已核对", "备注"]
+        ws.append(cols)
+        style_header(ws, len(cols))
+        ordered = sorted((dict(v, category=categorize(v["title"])) for v in vols),
+                         key=lambda v: natural_code(v["code"]))
+        total_entries = sum(v["entries"] for v in ordered)
+        total_files = sum(v["files"] for v in ordered)
+        ws.cell(row=1, column=5).value = f"图纸张数\n合计 {total_entries}"
+        ws.cell(row=1, column=6).value = f"版本文件数\n合计 {total_files}"
+        for c in (5, 6):
+            ws.cell(row=1, column=c).alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True)
+        runs = []
+        for n, v in enumerate(ordered, 1):
+            ws.append([n, v["code"] or "", v["title"], None,
+                       v["entries"], v["files"], None, None, None])
+            if runs and runs[-1][0] == v["category"]:
+                runs[-1][2] = n + 1
+            else:
+                runs.append([v["category"], n + 1, n + 1])
+        for cat, r0, r1 in runs:
+            if r1 > r0:
+                ws.merge_cells(start_row=r0, start_column=4, end_row=r1, end_column=4)
+            cell = ws.cell(row=r0, column=4)
+            cell.value = f"{cat}\n{r1 - r0 + 1}"
+            cell.font = bold
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for r in range(1, ws.max_row + 1):
+            for c in range(1, len(cols) + 1):
+                ws.cell(row=r, column=c).border = border
+        for c, w in zip(range(1, 10), [6, 12, 40, 12, 11, 12, 8, 8, 14]):
+            ws.column_dimensions[get_column_letter(c)].width = w
+
+    # ---- 每个导入文件夹一张清册工作表 ----
+    by_root = {}
+    for v in inv["volumes"]:
+        by_root.setdefault(v["scan_root"], []).append(v)
+    used_names = set()
+    for root_path in sorted(by_root, key=lambda p: (p is None, p or "")):
+        name = sheet_name_for(root_path, used_names)
+        write_register_sheet(wb.create_sheet(name), by_root[root_path])
+
+    # ---- 图纸明细（逐张，全库汇总）----
     ws2 = wb.create_sheet("图纸明细")
     cols2 = ["序号", "类别", "图册号", "卷册名称", "图号", "图纸名称", "目录REV",
              "版本文件数", "最新版文件", "所在文件夹"]

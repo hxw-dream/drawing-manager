@@ -1,9 +1,11 @@
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.round(n / 1024) + " KB";
 const fmtTime = (t) => new Date(t * 1000).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
 let data = null;
-let selected = null;   // 当前选中的册 folder_path，null = 图册列表视图
+let selFolder = null;   // scan_root，null = 文件夹列表
+let selVolume = null;   // 册 folder_path，null = 该文件夹下的册列表
 
 async function api(path) {
   const r = await fetch(path);
@@ -32,37 +34,63 @@ function bindActions() {
   });
 }
 
-/* ---------- 视图一：含版本差异图纸的图册列表 ---------- */
+/* ---------- 视图一：含多版本图纸的文件夹 ---------- */
+
+function folderList() {
+  const byRoot = {};
+  for (const g of data.groups) {
+    const key = g.scan_root || "";
+    (byRoot[key] = byRoot[key] || { groups: [], files: 0 }).groups.push(g);
+    byRoot[key].files += g.versions.length;
+  }
+  const folders = Object.entries(byRoot).map(([root, v]) => ({
+    root, name: root ? baseName(root) : "未分组",
+    vols: new Set(v.groups.map(g => g.folder_path)).size,
+    nos: v.groups.length, files: v.files,
+  })).sort((a, b) => (a.root > b.root ? 1 : -1));
+  return `<div class="section-title">${folders.length} 个文件夹存在多版本图纸，点击进入</div>` +
+    folders.map(f => `
+    <div class="card volcard" data-kind="folder" data-key="${esc(f.root)}" style="cursor:pointer">
+      <h3>🗂 ${esc(f.name)} <span class="badge rev">${f.nos} 个图号多版本</span></h3>
+      <div class="meta">${f.vols} 册受影响 · 共 ${f.files} 个版本文件</div>
+      <div class="path">📁 ${esc(f.root || "（来源未记录）")}</div>
+      <div class="meta">点击查看该库的版本差异 →</div>
+    </div>`).join("");
+}
+
+/* ---------- 视图二：该文件夹下有多版本的册 ---------- */
 
 function volumeList() {
+  const groups = data.groups.filter(g => (g.scan_root || "") === selFolder);
   const byVol = {};
-  for (const g of data.groups) {
+  for (const g of groups) {
     (byVol[g.folder_path] = byVol[g.folder_path] || {
       folder_name: g.folder_name, folder_path: g.folder_path, code: g.code,
-      volume_title: g.volume_title, vol_date: g.vol_date, vol_rev: g.vol_rev,
-      groups: []
+      volume_title: g.volume_title, vol_date: g.vol_date, vol_rev: g.vol_rev, groups: []
     }).groups.push(g);
   }
   const vols = Object.values(byVol);
-  return `<div class="section-title">${vols.length} 册存在多版本图纸，点击查看该册的版本差异</div>` +
-    vols.map(v => {
-      const nos = v.groups.map(g => g.drawing_no.split("-").pop()).join("、");
-      const fileCount = v.groups.reduce((s, g) => s + g.versions.length, 0);
-      return `
-      <div class="card volcard" data-key="${esc(v.folder_path)}" style="cursor:pointer">
-        <h3>${esc(v.volume_title || v.folder_name)} ${v.code ? `<span class="badge">${esc(v.code)}</span>` : ""}
-          <span class="badge rev">${v.groups.length} 个图号多版本</span></h3>
-        <div class="meta">${v.vol_date ? `📅 ${esc(v.vol_date)}` : ""}${v.vol_rev ? ` · 修订: ${esc(v.vol_rev)}` : ""}
-          · 共 ${fileCount} 个版本文件</div>
-        <div>涉及图号（末位）：${esc(nos)}</div>
-        <div class="path">📁 ${esc(v.folder_path)}</div>
-        <div class="fileline"><span class="meta">点击卡片展开版本差异 →</span>
-          <span class="actions" data-path="${esc(v.folder_path)}" data-folder="1"></span></div>
-      </div>`;
-    }).join("");
+  return `
+  <div class="section-title"><a href="#" id="backLink">← 返回文件夹列表</a></div>
+  <div class="card">
+    <h3>🗂 ${esc(baseName(selFolder) || "未分组")}</h3>
+    <div class="meta">${vols.length} 册存在多版本图纸</div>
+    <div class="path">📁 ${esc(selFolder || "")}</div>
+    <div class="fileline"><span class="actions" data-path="${esc(selFolder)}" data-folder="1"></span></div>
+  </div>
+  <div class="section-title">点击册查看版本差异</div>` +
+    vols.map(v => `
+    <div class="card volcard" data-kind="volume" data-key="${esc(v.folder_path)}" style="cursor:pointer">
+      <h3>${esc(v.volume_title || v.folder_name)} ${v.code ? `<span class="badge">${esc(v.code)}</span>` : ""}
+        <span class="badge rev">${v.groups.length} 个图号多版本</span></h3>
+      <div class="meta">${v.vol_date ? `📅 ${esc(v.vol_date)}` : ""}${v.vol_rev ? ` · 修订: ${esc(v.vol_rev)}` : ""}
+        · 共 ${v.groups.reduce((s, g) => s + g.versions.length, 0)} 个版本文件</div>
+      <div>涉及图号（末位）：${esc(v.groups.map(g => g.drawing_no.split("-").pop()).join("、"))}</div>
+      <div class="path">📁 ${esc(v.folder_path)}</div>
+    </div>`).join("");
 }
 
-/* ---------- 视图二：单册内的图号版本对比 ---------- */
+/* ---------- 视图三：册内图号版本对比 ---------- */
 
 function verLabel(v, i) {
   if (v.is_base) return "初版";
@@ -82,10 +110,10 @@ function diffLine(v, prev) {
 }
 
 function detail() {
-  const groups = data.groups.filter(g => g.folder_path === selected);
+  const groups = data.groups.filter(g => g.folder_path === selVolume);
   const head = groups[0];
   return `
-  <div class="section-title"><a href="#" id="backLink">← 返回图册列表</a></div>
+  <div class="section-title"><a href="#" id="backLink">← 返回${esc(baseName(selFolder) || "")}的册列表</a></div>
   <div class="card">
     <h3>${esc(head.volume_title || head.folder_name)} ${head.code ? `<span class="badge">${esc(head.code)}</span>` : ""}</h3>
     <div class="meta">${head.vol_date ? `📅 ${esc(head.vol_date)}` : ""}${head.vol_rev ? ` · 修订: ${esc(head.vol_rev)}` : ""}</div>
@@ -130,13 +158,21 @@ function render() {
       这里会按版本时间线展示每个版本的差异。</div>`;
     return;
   }
-  box.innerHTML = selected ? detail() : volumeList();
+  box.innerHTML = selVolume ? detail() : (selFolder ? volumeList() : folderList());
   bindActions();
   document.querySelectorAll(".volcard").forEach(el => {
-    el.onclick = () => { selected = el.dataset.key; render(); window.scrollTo(0, 0); };
+    el.onclick = () => {
+      if (el.dataset.kind === "volume") selVolume = el.dataset.key;
+      else { selFolder = el.dataset.key; selVolume = null; }
+      render(); window.scrollTo(0, 0);
+    };
   });
   const back = document.getElementById("backLink");
-  if (back) back.onclick = (e) => { e.preventDefault(); selected = null; render(); };
+  if (back) back.onclick = (e) => {
+    e.preventDefault();
+    if (selVolume) selVolume = null; else selFolder = null;
+    render();
+  };
 }
 
 api("/api/versions")

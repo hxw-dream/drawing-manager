@@ -26,8 +26,9 @@ CREATE TABLE IF NOT EXISTS volumes (
     project TEXT,
     volume_ref_no TEXT,       -- ML 表头里的卷册参考号，如 13-F10001-D0401
     ml_file TEXT,
-    parse_status TEXT NOT NULL DEFAULT 'ok',   -- ok | empty | failed | dwg_unsupported
-    parse_method TEXT,        -- text | ocr | none
+    scan_root TEXT,           -- 导入时扫描的根目录（用于按图纸库文件夹分组）
+    parse_status TEXT NOT NULL DEFAULT 'ok',   -- ok | empty | failed
+    parse_method TEXT,        -- text | ocr | dwg | none
     parse_error TEXT,
     ml_raw_text TEXT,
     scanned_at REAL
@@ -67,4 +68,8 @@ def connect() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(volumes)")}
+    if "scan_root" not in cols:  # 旧库升级
+        conn.execute("ALTER TABLE volumes ADD COLUMN scan_root TEXT")
+        conn.commit()
     return conn

@@ -9,11 +9,14 @@
 <body>
 <header>
   <h1>📐 工程图纸文件管理</h1>
-  <nav><a href="versions.html"><button>版本对比</button></a><a href="inventory.html"><button>图纸清册</button></a></nav>
+  <nav>
+    <a href="volumes.html"><button>册列表</button></a>
+    <a href="versions.html"><button>版本对比</button></a>
+    <a href="inventory.html"><button>图纸清册</button></a>
+  </nav>
   <div id="scanbox">
     <input id="root" placeholder="图纸根目录，如 D:\图纸库（扫描其下所有含 -ML 目录文件的册）">
     <button id="scanBtn" class="primary">扫描入库</button>
-    <button id="volBtn">册列表</button>
   </div>
 </header>
 <main>
@@ -25,6 +28,6 @@
   </div>
   <div id="results"><div class="empty">输入关键字搜索，或先在上方填入根目录「扫描入库」。</div></div>
 </main>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

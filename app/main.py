@@ -218,6 +218,7 @@ def version_groups():
             """SELECT e.id AS entry_id, e.drawing_no, e.title, e.rev,
                       v.id AS volume_id, v.folder_name, v.folder_path, v.code,
                       v.title AS volume_title, v.date_tag AS vol_date, v.rev_tag AS vol_rev,
+                      v.scan_root,
                       f.id AS file_id, f.filename, f.path, f.size, f.mtime
                FROM entries e
                JOIN volumes v ON v.id = e.volume_id
@@ -230,7 +231,8 @@ def version_groups():
             "drawing_no": r["drawing_no"], "title": r["title"], "rev": r["rev"],
             "folder_name": r["folder_name"], "folder_path": r["folder_path"],
             "volume_title": r["volume_title"], "code": r["code"],
-            "vol_date": r["vol_date"], "vol_rev": r["vol_rev"], "versions": []})
+            "vol_date": r["vol_date"], "vol_rev": r["vol_rev"],
+            "scan_root": r["scan_root"], "versions": []})
         stem = versioning.normalize_no(Path(r["filename"]).stem)
         date_tag, note = versioning.parse_version_suffix(r["drawing_no"], stem)
         g["versions"].append({
