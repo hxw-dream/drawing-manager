@@ -158,7 +158,7 @@ def search(q: str):
                FROM entries e JOIN volumes v ON v.id=e.volume_id""").fetchall()]
         for r in entry_rows:
             r["files"] = [dict(f) for f in conn.execute(
-                "SELECT id, filename, path, ext, size FROM files WHERE matched_entry_id=?",
+                "SELECT id, filename, path, ext, size, mtime FROM files WHERE matched_entry_id=?",
                 (r["id"],)).fetchall()]
         all_files = [dict(r) for r in conn.execute(
             """SELECT f.id, f.filename, f.path, f.ext, f.size,

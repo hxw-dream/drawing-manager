@@ -26,9 +26,46 @@ function verMeta(v, extra = []) {
   return parts.join(" ");
 }
 
+/* ---------- 条目排序 ---------- */
+let sortKey = localStorage.getItem("dm_sort_key") || "drawing_no";
+let sortDir = localStorage.getItem("dm_sort_dir") || "asc";
+const SORT_LABEL = { drawing_no: "图号", date: "修改日期", versions: "同图号多版本" };
+
+function natKey(s) {
+  return String(s || "").split(/(\d+)/).map(p => /^\d+$/.test(p) ? parseInt(p, 10) : p);
+}
+function cmpNat(a, b) {
+  const ka = natKey(a), kb = natKey(b);
+  for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+    const x = ka[i] ?? "", y = kb[i] ?? "";
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+function groupDate(g) {
+  let t = 0;
+  for (const v of g.versions) for (const f of (v.files || [])) t = Math.max(t, f.mtime || 0);
+  return t;
+}
+function groupFileCount(g) {
+  return g.versions.reduce((s, v) => s + (v.files || []).length, 0);
+}
+function sortedGroups(groups) {
+  const dir = sortDir === "asc" ? 1 : -1;
+  const arr = [...groups];
+  if (sortKey === "date")
+    arr.sort((a, b) => dir * ((groupDate(a) - groupDate(b)) || cmpNat(a.drawing_no, b.drawing_no)));
+  else if (sortKey === "versions")
+    arr.sort((a, b) => dir * ((groupFileCount(a) - groupFileCount(b)) || cmpNat(a.drawing_no, b.drawing_no)));
+  else
+    arr.sort((a, b) => dir * cmpNat(a.drawing_no, b.drawing_no));
+  return arr;
+}
+
 function renderEntryGroups(groups) {
   if (!groups.length) return "";
-  return `<div class="section-title">图纸条目（按图号分组，同图号多版本新在前）</div>` +
+  const title = `图纸条目（按图号分组 · ${SORT_LABEL[sortKey]} · ${sortDir === "asc" ? "递增" : "递减"}）`;
+  return `<div class="section-title">${title}</div>` +
     groups.map(g => {
       const first = g.versions[0];
       const nVersions = g.versions.length > 1 ? `<span class="badge rev">${g.versions.length} 个版本</span>` : "";
@@ -88,16 +125,25 @@ function bindActionButtons() {
   });
 }
 
+let lastData = null;
+
+function renderResults() {
+  if (!lastData) return;
+  const groups = sortedGroups(lastData.entry_groups);
+  $("#sortbar").style.display = groups.length ? "flex" : "none";
+  const html = renderEntryGroups(groups) + renderVolumes(lastData.volume_hits) + renderLooseFiles(lastData.loose_files);
+  $("#results").innerHTML = html || `<div class="empty">没有命中。试试别的关键字，或先扫描入库。</div>`;
+  bindActionButtons();
+}
+
 async function doSearch() {
   const q = $("#q").value.trim();
   const box = $("#results");
   if (!q) { box.innerHTML = `<div class="empty">请输入关键字。</div>`; return; }
   box.innerHTML = `<div class="empty">搜索中…</div>`;
   try {
-    const r = await api("/api/search?q=" + encodeURIComponent(q));
-    const html = renderEntryGroups(r.entry_groups) + renderVolumes(r.volume_hits) + renderLooseFiles(r.loose_files);
-    box.innerHTML = html || `<div class="empty">没有命中。试试别的关键字，或先扫描入库。</div>`;
-    bindActionButtons();
+    lastData = await api("/api/search?q=" + encodeURIComponent(q));
+    renderResults();
   } catch (e) { box.innerHTML = `<div class="empty">搜索出错: ${esc(e.message)}</div>`; }
 }
 
@@ -179,6 +225,21 @@ async function startScan() {
 
 $("#searchBtn").onclick = doSearch;
 $("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+
+/* 排序控件 */
+$("#sortKey").value = sortKey;
+$("#sortDir").textContent = sortDir === "asc" ? "递增 ↑" : "递减 ↓";
+$("#sortKey").onchange = (e) => {
+  sortKey = e.target.value;
+  localStorage.setItem("dm_sort_key", sortKey);
+  renderResults();
+};
+$("#sortDir").onclick = () => {
+  sortDir = sortDir === "asc" ? "desc" : "asc";
+  localStorage.setItem("dm_sort_dir", sortDir);
+  $("#sortDir").textContent = sortDir === "asc" ? "递增 ↑" : "递减 ↓";
+  renderResults();
+};
 $("#scanBtn").onclick = startScan;
 
 api("/api/scan/status").then(st => {

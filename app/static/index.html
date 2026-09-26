@@ -26,8 +26,17 @@
     <input id="q" placeholder="搜图号、图名、册名、文件名… 字词不必连续，如：取水照明 / 泵房布置" autofocus>
     <button id="searchBtn" class="primary">搜索</button>
   </div>
+  <div id="sortbar" style="display:none">
+    <span class="meta">排序</span>
+    <select id="sortKey">
+      <option value="drawing_no">图号</option>
+      <option value="date">修改日期</option>
+      <option value="versions">同图号多版本</option>
+    </select>
+    <button id="sortDir">递增 ↑</button>
+  </div>
   <div id="results"><div class="empty">输入关键字搜索，或先在上方填入根目录「扫描入库」。</div></div>
 </main>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
