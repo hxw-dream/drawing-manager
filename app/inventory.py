@@ -80,7 +80,9 @@ def build_inventory(conn):
     return {"generated_at": datetime.now().isoformat(timespec="seconds"),
             "items": items,
             "categories": {c: cat_counts.get(c, 0) for c in CATEGORY_ORDER if cat_counts.get(c)},
-            "volumes": sorted(vols.values(), key=lambda v: v["code"] or "")}
+            "volumes": sorted(vols.values(), key=lambda v: v["code"] or ""),
+            "folder_names": {r["scan_root"]: r["name"] for r in conn.execute(
+                "SELECT scan_root, name FROM folder_names").fetchall()}}
 
 
 def make_xlsx(inv) -> bytes:
@@ -108,8 +110,9 @@ def make_xlsx(inv) -> bytes:
         return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", code or "")]
 
     def sheet_name_for(path, used):
-        name = re.sub(r"[\\/:*?\[\]]", "_",
-                      os.path.basename(path.rstrip("\\/")) if path else "未分组")[:28] or "未分组"
+        raw = inv["folder_names"].get(path) or \
+            (os.path.basename(path.rstrip("\\/")) if path else "") or "未分组"
+        name = re.sub(r"[\\/:*?\[\]]", "_", raw)[:28] or "未分组"
         base, n = name, 2
         while name in used:
             name = f"{base}({n})"

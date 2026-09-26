@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS files (
 );
 CREATE INDEX IF NOT EXISTS idx_files_volume ON files(volume_id);
 CREATE INDEX IF NOT EXISTS idx_files_entry ON files(matched_entry_id);
+CREATE TABLE IF NOT EXISTS folder_names (
+    scan_root TEXT PRIMARY KEY,
+    name TEXT NOT NULL           -- 导入文件夹的自定义显示名
+);
 """
 
 

@@ -4,13 +4,34 @@ const fmtTime = (t) => new Date(t * 1000).toLocaleString("zh-CN", { year: "numer
 const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
 let data = null;
+let folderNames = {};   // scan_root -> 自定义显示名
 let selFolder = null;   // scan_root，null = 文件夹列表
 let selVolume = null;   // 册 folder_path，null = 该文件夹下的册列表
 
-async function api(path) {
-  const r = await fetch(path);
-  if (!r.ok) throw new Error(r.statusText);
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
+}
+
+function displayName(root) {
+  return folderNames[root] || (root ? baseName(root) : "未分组");
+}
+
+async function loadAll() {
+  [data, folderNames] = await Promise.all([api("/api/versions"), api("/api/folders")]);
+}
+
+async function renameFolder(root) {
+  const name = prompt("自定义该图纸库的显示名称（留空恢复默认文件夹名）：",
+                      displayName(root));
+  if (name === null) return;
+  await api("/api/folders/rename", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ root, name })
+  });
+  await loadAll();
+  render();
 }
 
 function openBtn(path, label, select) {
@@ -44,17 +65,20 @@ function folderList() {
     byRoot[key].files += g.versions.length;
   }
   const folders = Object.entries(byRoot).map(([root, v]) => ({
-    root, name: root ? baseName(root) : "未分组",
+    root,
     vols: new Set(v.groups.map(g => g.folder_path)).size,
     nos: v.groups.length, files: v.files,
   })).sort((a, b) => (a.root > b.root ? 1 : -1));
   return `<div class="section-title">${folders.length} 个文件夹存在多版本图纸，点击进入</div>` +
     folders.map(f => `
     <div class="card volcard" data-kind="folder" data-key="${esc(f.root)}" style="cursor:pointer">
-      <h3>🗂 ${esc(f.name)} <span class="badge rev">${f.nos} 个图号多版本</span></h3>
+      <h3>🗂 ${esc(displayName(f.root))} <span class="badge rev">${f.nos} 个图号多版本</span></h3>
       <div class="meta">${f.vols} 册受影响 · 共 ${f.files} 个版本文件</div>
       <div class="path">📁 ${esc(f.root || "（来源未记录）")}</div>
-      <div class="meta">点击查看该库的版本差异 →</div>
+      <div class="fileline">
+        <span class="meta">点击查看该库的版本差异 →</span>
+        ${f.root ? `<button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
+      </div>
     </div>`).join("");
 }
 
@@ -73,10 +97,13 @@ function volumeList() {
   return `
   <div class="section-title"><a href="#" id="backLink">← 返回文件夹列表</a></div>
   <div class="card">
-    <h3>🗂 ${esc(baseName(selFolder) || "未分组")}</h3>
+    <h3>🗂 ${esc(displayName(selFolder))}</h3>
     <div class="meta">${vols.length} 册存在多版本图纸</div>
     <div class="path">📁 ${esc(selFolder || "")}</div>
-    <div class="fileline"><span class="actions" data-path="${esc(selFolder)}" data-folder="1"></span></div>
+    <div class="fileline">
+      <span class="actions" data-path="${esc(selFolder)}" data-folder="1"></span>
+      ${selFolder ? `<button class="renBtn" data-root="${esc(selFolder)}">✏️ 重命名</button>` : ""}
+    </div>
   </div>
   <div class="section-title">点击册查看版本差异</div>` +
     vols.map(v => `
@@ -113,7 +140,7 @@ function detail() {
   const groups = data.groups.filter(g => g.folder_path === selVolume);
   const head = groups[0];
   return `
-  <div class="section-title"><a href="#" id="backLink">← 返回${esc(baseName(selFolder) || "")}的册列表</a></div>
+  <div class="section-title"><a href="#" id="backLink">← 返回${esc(displayName(selFolder))}的册列表</a></div>
   <div class="card">
     <h3>${esc(head.volume_title || head.folder_name)} ${head.code ? `<span class="badge">${esc(head.code)}</span>` : ""}</h3>
     <div class="meta">${head.vol_date ? `📅 ${esc(head.vol_date)}` : ""}${head.vol_rev ? ` · 修订: ${esc(head.vol_rev)}` : ""}</div>
@@ -167,6 +194,9 @@ function render() {
       render(); window.scrollTo(0, 0);
     };
   });
+  document.querySelectorAll(".renBtn").forEach(el => {
+    el.onclick = (ev) => { ev.stopPropagation(); renameFolder(el.dataset.root); };
+  });
   const back = document.getElementById("backLink");
   if (back) back.onclick = (e) => {
     e.preventDefault();
@@ -175,6 +205,6 @@ function render() {
   };
 }
 
-api("/api/versions")
-  .then(d => { data = d; render(); })
+loadAll()
+  .then(render)
   .catch(e => { document.getElementById("results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });

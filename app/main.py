@@ -54,6 +54,11 @@ class ScanReq(BaseModel):
     root: str
 
 
+class FolderRenameReq(BaseModel):
+    root: str
+    name: str = ""
+
+
 class OpenReq(BaseModel):
     path: str
     select: bool = False  # True=在资源管理器中定位文件，False=直接打开
@@ -207,6 +212,27 @@ def search(q: str):
     loose_files = [f for f in loose_files if f["id"] not in attached]
     return {"q": q, "entry_groups": versioning.group_entry_hits(matched_entries),
             "loose_files": loose_files, "volume_hits": volume_hits}
+
+
+@app.get("/api/folders")
+def get_folder_names():
+    with db.connect() as conn:
+        return {r["scan_root"]: r["name"] for r in
+                conn.execute("SELECT scan_root, name FROM folder_names").fetchall()}
+
+
+@app.post("/api/folders/rename")
+def rename_folder(req: FolderRenameReq):
+    name = req.name.strip()
+    with db.connect() as conn:
+        if name:
+            conn.execute(
+                """INSERT INTO folder_names(scan_root, name) VALUES(?, ?)
+                   ON CONFLICT(scan_root) DO UPDATE SET name=excluded.name""",
+                (req.root, name))
+        else:  # 留空 = 恢复默认名（文件夹名）
+            conn.execute("DELETE FROM folder_names WHERE scan_root=?", (req.root,))
+    return {"ok": True}
 
 
 @app.get("/api/versions")

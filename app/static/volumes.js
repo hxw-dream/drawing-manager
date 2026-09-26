@@ -2,12 +2,33 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<":
 const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
 let vols = null;
+let folderNames = {};   // scan_root -> 自定义显示名
 let selFolder = null;   // 当前选中的图纸库文件夹（scan_root），null = 文件夹列表视图
 
-async function api(path) {
-  const r = await fetch(path);
-  if (!r.ok) throw new Error(r.statusText);
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
+}
+
+function displayName(root) {
+  return folderNames[root] || (root ? baseName(root) : "未分组");
+}
+
+async function loadAll() {
+  [vols, folderNames] = await Promise.all([api("/api/volumes"), api("/api/folders")]);
+}
+
+async function renameFolder(root) {
+  const name = prompt("自定义该图纸库的显示名称（留空恢复默认文件夹名）：",
+                      displayName(root));
+  if (name === null) return;
+  await api("/api/folders/rename", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ root, name })
+  });
+  await loadAll();
+  render();
 }
 
 function openBtn(path, label, select) {
@@ -57,10 +78,13 @@ function folderList() {
   return `<div class="section-title">共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册</div>` +
     folders.map(f => `
     <div class="card volcard" data-key="${esc(f.root)}" style="cursor:pointer">
-      <h3>🗂 ${esc(f.name)} <span class="badge">${f.list.length} 册</span></h3>
+      <h3>🗂 ${esc(displayName(f.root))} <span class="badge">${f.list.length} 册</span></h3>
       <div class="meta">图纸条目 ${f.entries} 条 · 文件 ${f.files} 个</div>
       <div class="path">📁 ${esc(f.root || "（来源未记录的册，多为旧版索引遗留）")}</div>
-      <div class="meta">点击查看该库的册 →</div>
+      <div class="fileline">
+        <span class="meta">点击查看该库的册 →</span>
+        ${f.root ? `<button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
+      </div>
     </div>`).join("");
 }
 
@@ -71,10 +95,13 @@ function volumeList() {
   return `
   <div class="section-title"><a href="#" id="backLink">← 返回文件夹列表</a></div>
   <div class="card">
-    <h3>🗂 ${esc(baseName(selFolder) || "未分组")}</h3>
+    <h3>🗂 ${esc(displayName(selFolder))}</h3>
     <div class="meta">${list.length} 册 · 图纸条目 ${list.reduce((s, v) => s + v.entry_count, 0)} 条</div>
     <div class="path">📁 ${esc(selFolder || "")}</div>
-    <div class="fileline"><span class="actions" data-path="${esc(selFolder)}" data-folder="1"></span></div>
+    <div class="fileline">
+      <span class="actions" data-path="${esc(selFolder)}" data-folder="1"></span>
+      ${selFolder ? `<button class="renBtn" data-root="${esc(selFolder)}">✏️ 重命名</button>` : ""}
+    </div>
   </div>
   <div class="section-title">该库已入库的册</div>` +
   list.map(v => `
@@ -101,10 +128,13 @@ function render() {
   document.querySelectorAll(".volcard").forEach(el => {
     el.onclick = () => { selFolder = el.dataset.key; render(); window.scrollTo(0, 0); };
   });
+  document.querySelectorAll(".renBtn").forEach(el => {
+    el.onclick = (ev) => { ev.stopPropagation(); renameFolder(el.dataset.root); };
+  });
   const back = document.getElementById("backLink");
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
 
-api("/api/volumes")
-  .then(d => { vols = d; render(); })
+loadAll()
+  .then(render)
   .catch(e => { document.getElementById("results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
