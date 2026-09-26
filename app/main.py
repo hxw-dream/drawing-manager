@@ -63,7 +63,8 @@ def start_scan(req: ScanReq):
         try:
             _scan_state["report"] = scanner.scan_root(root, _log)
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            CONFIG_PATH.write_text(json.dumps({"last_root": root}, ensure_ascii=False))
+            CONFIG_PATH.write_text(json.dumps({"last_root": root}, ensure_ascii=False),
+                                   encoding="utf-8")
         except Exception as ex:
             _scan_state["error"] = f"{type(ex).__name__}: {ex}"
             _log(f"扫描出错: {ex}")
@@ -76,7 +77,13 @@ def start_scan(req: ScanReq):
 
 @app.get("/api/scan/status")
 def scan_status():
-    cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+    if CONFIG_PATH.exists():
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:  # 兼容历史上按 GBK 写入的文件
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="gbk"))
+    else:
+        cfg = {}
     return {**_scan_state, "last_root": cfg.get("last_root")}
 
 
