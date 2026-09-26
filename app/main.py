@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,14 @@ async def reject_foreign_host(request, call_next):
         return JSONResponse(status_code=403, content={"detail": "forbidden host"})
     return await call_next(request)
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+def _static_dir() -> Path:
+    """开发态：app/static；PyInstaller 打包态：解包目录里的 app/static。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "app" / "static"
+    return Path(__file__).resolve().parent / "static"
+
+
+STATIC_DIR = _static_dir()
 CONFIG_PATH = db.DATA_DIR / "config.json"
 
 _scan_state = {"running": False, "log": [], "report": None, "error": None}

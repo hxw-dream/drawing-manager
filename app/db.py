@@ -1,8 +1,17 @@
 """SQLite 存层：索引库只记录信息，从不改动用户图纸文件。"""
 import sqlite3
+import sys
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def _base_dir() -> Path:
+    """开发态：项目根目录；PyInstaller 打包态：exe 所在目录（data 跟着 exe 走）。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+
+DATA_DIR = _base_dir() / "data"
 DB_PATH = DATA_DIR / "index.db"
 
 SCHEMA = """

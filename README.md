@@ -14,9 +14,23 @@
 - 单图版本：文件名 `图号-日期修改说明.pdf`，如 `…-03-2025.3.9桥架定位变化-模型.pdf`
 - 图纸清册导出（Excel）：每册一行按图册号升序，类别合并块 + 逐张明细 + 分类统计
 
-## 启动
+## 分发给别人用（绿色版打包）
 
-双击 `run.bat`（自动打开浏览器），或：
+双击 `build.bat`：自动用 PyInstaller 打成 onedir 文件夹并压缩为
+`dist\drawing-manager-绿色版.zip`（约 120MB）。发给同事后：
+
+1. 解压到任意位置（U 盘也行）
+2. 双击 `DrawingManager.exe` —— 无窗口，自动在浏览器打开页面（`http://127.0.0.1:8000`）
+3. 索引库建在 exe 旁的 `data\` 文件夹，整个文件夹可整体搬走
+4. 停止服务：双击文件夹里的 `停止服务.bat`（或关机）
+
+无需安装 Python 和任何依赖。DWG 目录识别需要对方另装
+[ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter)（免费），
+没装不影响 PDF 目录功能。
+
+## 开发模式启动
+
+双击 `run.bat`（需先按 requirements.txt 建好 .venv），或：
 
 ```bash
 .venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
