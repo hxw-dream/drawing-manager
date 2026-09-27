@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>工程图纸文件管理</title>
 <script>if(localStorage.dm_theme==='dark')document.documentElement.classList.add('dark')</script>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header class="titlebar">
@@ -13,8 +13,6 @@
 </header>
 <main>
   <section id="view-search">
-  <div id="scanstatus"></div>
-  <div id="scanissues"></div>
   <div id="searchrow">
     <input id="q" placeholder="搜图号、图名、册名、文件名… 字词不必连续，如：取水照明 / 泵房布置" autofocus>
     <button id="searchBtn" class="primary">搜索</button>
@@ -30,6 +28,18 @@
   </div>
   <div id="results"><div class="empty">输入关键字搜索，或先在上方填入根目录「扫描入库」。</div></div>
   </section>
+  <section id="view-scan" hidden>
+    <div class="card">
+      <h3>📥 扫描入库</h3>
+      <div class="meta" style="margin-bottom:10px">填写图纸根目录，其下所有含 -ML 目录文件的文件夹会被识别为一册；可随时重扫，增量更新，已消失的册自动移出索引</div>
+      <div id="scanbox">
+        <input id="root" placeholder="图纸根目录，如 D:\图纸库">
+        <button id="scanBtn" class="primary">开始扫描</button>
+      </div>
+    </div>
+    <div id="scanstatus"></div>
+    <div id="scanissues"></div>
+  </section>
   <section id="view-volumes" hidden><div id="vol-results"><div class="empty">加载中…</div></div></section>
   <section id="view-versions" hidden><div id="ver-results"><div class="empty">加载中…</div></div></section>
   <section id="view-inventory" hidden>
@@ -40,7 +50,7 @@
     <div id="inv-results"><div class="empty">加载中…</div></div>
   </section>
 </main>
-<script src="common.js?v=7"></script><script src="app.js?v=12"></script><script src="volumes.js?v=7"></script><script src="versions.js?v=9"></script><script src="inventory.js?v=6"></script>
+<script src="common.js?v=8"></script><script src="app.js?v=13"></script><script src="volumes.js?v=7"></script><script src="versions.js?v=9"></script><script src="inventory.js?v=6"></script>
 <script>
   dmBindSidebar();
   dmBindTheme();

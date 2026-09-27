@@ -7,6 +7,7 @@
   const MOON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
   const NAVS = [
     { hash: "search", label: "搜索", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' },
+    { hash: "scan", label: "扫描入库", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>' },
     { hash: "volumes", label: "册列表", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>' },
     { hash: "versions", label: "版本对比", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>' },
     { hash: "inventory", label: "图纸清册", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>' },
@@ -20,11 +21,6 @@
     aside.innerHTML = `
       <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">图纸管理</span></div>
       <div class="sb-proj"><select id="projSel" class="projsel" title="切换项目"></select></div>
-      <div class="sb-scan">
-        <div class="sb-sec-title sb-label">扫描入库</div>
-        <input id="root" placeholder="图纸根目录，如 D:\图纸库">
-        <button id="scanBtn" class="primary" title="扫描根目录下所有含 -ML 目录文件的册">📥 扫描入库</button>
-      </div>
       <nav class="sb-nav">
         ${NAVS.map(n => `<a class="sb-link" data-view="${n.hash}" href="#${n.hash}" title="${n.label}">${n.icon}<span class="sb-label">${n.label}</span></a>`).join("")}
       </nav>
@@ -127,7 +123,7 @@
 })();
 
 /* ---------- 单页视图切换（hash 路由） ---------- */
-const DM_VIEWS = ["search", "volumes", "versions", "inventory"];
+const DM_VIEWS = ["search", "scan", "volumes", "versions", "inventory"];
 window.dmCurrentView = function () {
   const v = location.hash.replace("#", "");
   return DM_VIEWS.includes(v) ? v : "search";
@@ -140,7 +136,7 @@ window.dmShowView = function (name) {
   });
   document.querySelectorAll("#sidebar .sb-link").forEach(a =>
     a.classList.toggle("active", a.dataset.view === name));
-  const loader = { search: window.dmLoadSearch, volumes: window.dmLoadVolumes,
+  const loader = { search: window.dmLoadSearch, scan: window.dmLoadScan, volumes: window.dmLoadVolumes,
                    versions: window.dmLoadVersions, inventory: window.dmLoadInventory }[name];
   if (loader) loader();
 };

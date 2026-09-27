@@ -252,4 +252,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.dmLoadSearch = function () { if (lastData) renderResults(); };
+
+window.dmLoadScan = function () {
+  api("/api/scan/status").then(st => {
+    if (st.running || st.log.length) pollScan();
+  }).catch(() => {});
+};
 })();
