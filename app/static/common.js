@@ -17,6 +17,7 @@
     const page = location.pathname.split("/").pop() || "index.html";
     const aside = document.createElement("aside");
     aside.id = "sidebar";
+    aside.className = "sidebar";
     aside.innerHTML = `
       <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">图纸管理</span></div>
       <div class="sb-proj"><select id="projSel" class="projsel" title="切换项目"></select></div>
