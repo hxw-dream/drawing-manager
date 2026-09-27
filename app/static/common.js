@@ -19,7 +19,7 @@
     aside.id = "sidebar";
     aside.className = "sidebar";
     aside.innerHTML = `
-      <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">功能总览</span></div>
+      <div class="sb-logo" title="工程图纸文件管理"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="sb-label">功能总览</span></div>
       <div class="sb-proj"><select id="projSel" class="projsel" title="切换项目"></select></div>
       <nav class="sb-nav">
         ${NAVS.map(n => `<a class="sb-link" data-view="${n.hash}" href="#${n.hash}" title="${n.label}">${n.icon}<span class="sb-label">${n.label}</span></a>`).join("")}
