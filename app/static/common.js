@@ -8,6 +8,7 @@
   const NAVS = [
     { hash: "search", label: "搜索", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' },
     { hash: "scan", label: "扫描入库", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>' },
+    { hash: "projects", label: "项目管理", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>' },
     { hash: "volumes", label: "册列表", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>' },
     { hash: "versions", label: "版本对比", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>' },
     { hash: "inventory", label: "图纸清册", icon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>' },
@@ -123,7 +124,7 @@
 })();
 
 /* ---------- 单页视图切换（hash 路由） ---------- */
-const DM_VIEWS = ["search", "scan", "volumes", "versions", "inventory"];
+const DM_VIEWS = ["search", "scan", "projects", "volumes", "versions", "inventory"];
 window.dmCurrentView = function () {
   const v = location.hash.replace("#", "");
   return DM_VIEWS.includes(v) ? v : "search";
@@ -136,7 +137,7 @@ window.dmShowView = function (name) {
   });
   document.querySelectorAll("#sidebar .sb-link").forEach(a =>
     a.classList.toggle("active", a.dataset.view === name));
-  const loader = { search: window.dmLoadSearch, scan: window.dmLoadScan, volumes: window.dmLoadVolumes,
+  const loader = { search: window.dmLoadSearch, scan: window.dmLoadScan, projects: window.dmLoadProjects, volumes: window.dmLoadVolumes,
                    versions: window.dmLoadVersions, inventory: window.dmLoadInventory }[name];
   if (loader) loader();
 };

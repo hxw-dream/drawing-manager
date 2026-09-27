@@ -100,9 +100,7 @@ function folderList() {
   })).sort((a, b) => (a.root > b.root ? 1 : -1));
   const projOpts = projList.map(pr =>
     `<option value="${pr.id}" ${pr.id === dmCurrentProject() ? "selected" : ""}>${esc(pr.name)}</option>`).join("");
-  return `<div class="section-title">
-    共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册
-    <button id="newProjBtn" style="margin-left:10px">＋ 新建项目</button></div>` +
+  return `<div class="section-title">共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册</div>` +
     folders.map(f => `
     <div class="card volcard" data-key="${esc(f.root)}" style="cursor:pointer">
       <h3>🗂 ${esc(displayName(f.root))} <span class="badge">${f.list.length} 册</span></h3>
@@ -165,8 +163,6 @@ function render() {
     el.onclick = (ev) => ev.stopPropagation();
     el.onchange = () => assignFolder(el.dataset.root, parseInt(el.value, 10));
   });
-  const npb = document.getElementById("newProjBtn");
-  if (npb) npb.onclick = (ev) => { ev.stopPropagation(); createProject(); };
   const back = document.getElementById("backLink");
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
