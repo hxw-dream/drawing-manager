@@ -224,29 +224,32 @@ async function startScan() {
   pollTimer = setInterval(pollScan, 800);
 }
 
-$("#searchBtn").onclick = doSearch;
-$("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+/* DOM 绑定推迟到 DOMContentLoaded：扫描按钮在侧边栏由 common.js 动态创建 */
+document.addEventListener("DOMContentLoaded", () => {
+  $("#searchBtn").onclick = doSearch;
+  $("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 
-/* 排序控件 */
-$("#sortKey").value = sortKey;
-$("#sortDir").textContent = sortDir === "asc" ? "递增 ↑" : "递减 ↓";
-$("#sortKey").onchange = (e) => {
-  sortKey = e.target.value;
-  localStorage.setItem("dm_sort_key", sortKey);
-  renderResults();
-};
-$("#sortDir").onclick = () => {
-  sortDir = sortDir === "asc" ? "desc" : "asc";
-  localStorage.setItem("dm_sort_dir", sortDir);
+  /* 排序控件 */
+  $("#sortKey").value = sortKey;
   $("#sortDir").textContent = sortDir === "asc" ? "递增 ↑" : "递减 ↓";
-  renderResults();
-};
-$("#scanBtn").onclick = startScan;
+  $("#sortKey").onchange = (e) => {
+    sortKey = e.target.value;
+    localStorage.setItem("dm_sort_key", sortKey);
+    renderResults();
+  };
+  $("#sortDir").onclick = () => {
+    sortDir = sortDir === "asc" ? "desc" : "asc";
+    localStorage.setItem("dm_sort_dir", sortDir);
+    $("#sortDir").textContent = sortDir === "asc" ? "递增 ↑" : "递减 ↓";
+    renderResults();
+  };
+  $("#scanBtn").onclick = startScan;
+
+  api("/api/scan/status").then(st => {
+    if (st.last_root) $("#root").value = st.last_root;
+    if (st.running || st.log.length) pollScan();
+  }).catch(() => {});
+});
 
 window.dmLoadSearch = function () { if (lastData) renderResults(); };
-
-api("/api/scan/status").then(st => {
-  if (st.last_root) { $("#root").value = st.last_root; $("#root").size = $("#root").value.length; }
-  if (st.running || st.log.length) pollScan();
-}).catch(() => {});
 })();

@@ -5,14 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>工程图纸文件管理</title>
 <script>if(localStorage.dm_theme==='dark')document.documentElement.classList.add('dark')</script>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
-<header>
-  <div id="scanbox">
-    <input id="root" placeholder="图纸根目录，如 D:\图纸库（扫描其下所有含 -ML 目录文件的册）">
-    <button id="scanBtn" class="primary">扫描入库</button>
-  </div>
+<header class="titlebar">
+  <h1 class="page-title">工程图纸文件管理系统</h1>
 </header>
 <main>
   <section id="view-search">
@@ -43,7 +40,7 @@
     <div id="inv-results"><div class="empty">加载中…</div></div>
   </section>
 </main>
-<script src="common.js?v=6"></script><script src="app.js?v=10"></script><script src="volumes.js?v=7"></script><script src="versions.js?v=9"></script><script src="inventory.js?v=6"></script>
+<script src="common.js?v=7"></script><script src="app.js?v=12"></script><script src="volumes.js?v=7"></script><script src="versions.js?v=9"></script><script src="inventory.js?v=6"></script>
 <script>
   dmBindSidebar();
   dmBindTheme();

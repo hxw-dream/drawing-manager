@@ -20,6 +20,11 @@
     aside.innerHTML = `
       <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">图纸管理</span></div>
       <div class="sb-proj"><select id="projSel" class="projsel" title="切换项目"></select></div>
+      <div class="sb-scan">
+        <div class="sb-sec-title sb-label">扫描入库</div>
+        <input id="root" placeholder="图纸根目录，如 D:\图纸库">
+        <button id="scanBtn" class="primary" title="扫描根目录下所有含 -ML 目录文件的册">📥 扫描入库</button>
+      </div>
       <nav class="sb-nav">
         ${NAVS.map(n => `<a class="sb-link" data-view="${n.hash}" href="#${n.hash}" title="${n.label}">${n.icon}<span class="sb-label">${n.label}</span></a>`).join("")}
       </nav>
