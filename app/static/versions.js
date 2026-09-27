@@ -206,6 +206,7 @@ function render() {
   };
 }
 
+dmBindSidebar();
 dmBindTheme();
 dmFillProjects();
 document.addEventListener("dmprojectchange", () => { selFolder = null; selVolume = null; loadAll().then(render); });

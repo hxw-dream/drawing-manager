@@ -242,6 +242,7 @@ $("#sortDir").onclick = () => {
 };
 $("#scanBtn").onclick = startScan;
 
+dmBindSidebar();
 dmBindTheme();
 dmFillProjects();
 document.addEventListener("dmprojectchange", () => { if ($("#q").value.trim()) doSearch(); });

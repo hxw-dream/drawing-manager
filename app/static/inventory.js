@@ -44,6 +44,7 @@ document.getElementById("exportBtn").onclick = () => {
   window.location.href = "/api/inventory/export?project=" + dmCurrentProject();
 };
 
+dmBindSidebar();
 dmBindTheme();
 dmFillProjects();
 document.addEventListener("dmprojectchange", () => location.reload());

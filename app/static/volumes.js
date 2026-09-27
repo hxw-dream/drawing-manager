@@ -170,6 +170,7 @@ function render() {
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
 
+dmBindSidebar();
 dmBindTheme();
 dmFillProjects();
 document.addEventListener("dmprojectchange", () => { selFolder = null; loadAll().then(render); });
