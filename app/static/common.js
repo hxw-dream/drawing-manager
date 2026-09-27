@@ -30,6 +30,9 @@
           <button type="button" class="segopt" data-mode="light" aria-pressed="true" title="浅色主题">${SUN}<span class="seglabel">浅色</span></button>
           <button type="button" class="segopt" data-mode="dark" aria-pressed="false" title="深色主题">${MOON}<span class="seglabel">深色</span></button>
         </div>
+        <button type="button" id="sbAuto" class="sb-auto" aria-pressed="false" title="收起后鼠标悬停自动展开">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12h10"/><path d="m13 6 6 6-6 6"/><path d="m3 6 3 3-3 3"/></svg><span class="sb-label">悬停展开</span>
+        </button>
         <button type="button" id="sbToggle" class="sb-collapse" title="收起侧边栏">«<span class="sb-label"> 收起</span></button>
       </div>`;
     const content = document.createElement("div");
@@ -53,6 +56,30 @@
       localStorage.setItem("dm_sidebar", c ? "1" : "0");
       apply(c);
     };
+    // 悬停自动展开：收起态下鼠标进入侧边栏临时展开，移出收起
+    const syncAuto = () => {
+      const on = localStorage.getItem("dm_autoexpand") === "1";
+      document.body.classList.toggle("sb-auto-on", on);
+      const btn = aside.querySelector("#sbAuto");
+      btn.setAttribute("aria-pressed", String(on));
+      btn.title = on ? "悬停自动展开：已开启（点击关闭）" : "悬停自动展开：已关闭（点击开启）";
+      if (!on) document.body.classList.remove("sb-hover");
+    };
+    aside.addEventListener("mouseenter", () => {
+      if (localStorage.getItem("dm_autoexpand") === "1"
+          && document.body.classList.contains("sb-collapsed")) {
+        document.body.classList.add("sb-hover");
+      }
+    });
+    aside.addEventListener("mouseleave", () => {
+      document.body.classList.remove("sb-hover");
+    });
+    aside.querySelector("#sbAuto").onclick = () => {
+      const on = localStorage.getItem("dm_autoexpand") === "1";
+      localStorage.setItem("dm_autoexpand", on ? "0" : "1");
+      syncAuto();
+    };
+    syncAuto();
   };
 
   window.dmSetTheme = function (mode) {
