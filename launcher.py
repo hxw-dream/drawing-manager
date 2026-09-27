@@ -18,7 +18,25 @@ def _port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _redirect_output():
+    """无窗口模式（console=False）下 stdout/stderr 为 None，
+    uvicorn 配置日志 formatter 会崩溃；统一重定向到 exe 旁日志文件。"""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(".")
+    logf = open(base / "service.log", "a", buffering=1, encoding="utf-8", errors="replace")
+    sys.stdout = logf
+    sys.stderr = logf
+    try:  # 同步 C 层句柄，覆盖原生库的直接输出
+        import os
+        os.dup2(logf.fileno(), 1)
+        os.dup2(logf.fileno(), 2)
+    except Exception:
+        pass
+
+
 def main():
+    _redirect_output()
     if _port_in_use(8000):
         webbrowser.open(URL)  # 已有实例在跑：打开页面即退出
         return
