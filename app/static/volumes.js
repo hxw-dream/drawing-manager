@@ -1,3 +1,4 @@
+(function () {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
@@ -146,7 +147,7 @@ function volumeList() {
 /* ---------- 渲染与事件 ---------- */
 
 function render() {
-  const box = document.getElementById("results");
+  const box = document.getElementById("vol-results");
   if (!vols.length) {
     box.innerHTML = `<div class="empty">索引为空，请先在主页扫描入库。</div>`;
     return;
@@ -170,11 +171,9 @@ function render() {
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
 
-dmBindSidebar();
-dmBindTheme();
-dmFillProjects();
-document.addEventListener("dmprojectchange", () => { selFolder = null; loadAll().then(render); });
-
-loadAll()
-  .then(render)
-  .catch(e => { document.getElementById("results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+window.dmLoadVolumes = function () {
+  loadAll()
+    .then(render)
+    .catch(e => { document.getElementById("vol-results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+};
+})();

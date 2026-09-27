@@ -1,3 +1,4 @@
+(function () {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 async function api(path) {
@@ -44,19 +45,19 @@ document.getElementById("exportBtn").onclick = () => {
   window.location.href = "/api/inventory/export?project=" + dmCurrentProject();
 };
 
-dmBindSidebar();
-dmBindTheme();
-dmFillProjects();
-document.addEventListener("dmprojectchange", () => location.reload());
-
-api("/api/inventory?project=" + dmCurrentProject())
-  .then(inv => {
-    if (!inv.items.length) {
-      document.getElementById("results").innerHTML = `<div class="empty">索引为空，请先在主页扫描入库。</div>`;
-      return;
-    }
-    document.getElementById("stats").innerHTML = statCards(inv);
-    document.getElementById("results").innerHTML =
-      `<div class="section-title">分类明细（生成于 ${esc(inv.generated_at.replace("T", " "))}）</div>` + catCards(inv);
-  })
-  .catch(e => { document.getElementById("results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+window.dmLoadInventory = function () {
+  api("/api/inventory?project=" + dmCurrentProject())
+    .then(inv => {
+      if (!inv.items.length) {
+        document.getElementById("inv-stats").style.display = "none";
+        document.getElementById("inv-results").innerHTML = `<div class="empty">当前项目还没有图纸，请先在「搜索」页扫描入库。</div>`;
+        return;
+      }
+      document.getElementById("inv-stats").style.display = "flex";
+      document.getElementById("inv-stats").innerHTML = statCards(inv);
+      document.getElementById("inv-results").innerHTML =
+        `<div class="section-title">分类明细（生成于 ${esc(inv.generated_at.replace("T", " "))}）</div>` + catCards(inv);
+    })
+    .catch(e => { document.getElementById("inv-results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+};
+})();

@@ -15,6 +15,7 @@
   </div>
 </header>
 <main>
+  <section id="view-search">
   <div id="scanstatus"></div>
   <div id="scanissues"></div>
   <div id="searchrow">
@@ -31,7 +32,22 @@
     <button id="sortDir">递增 ↑</button>
   </div>
   <div id="results"><div class="empty">输入关键字搜索，或先在上方填入根目录「扫描入库」。</div></div>
+  </section>
+  <section id="view-volumes" hidden><div id="vol-results"><div class="empty">加载中…</div></div></section>
+  <section id="view-versions" hidden><div id="ver-results"><div class="empty">加载中…</div></div></section>
+  <section id="view-inventory" hidden>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button id="exportBtn" class="primary">⬇ 导出 Excel</button>
+    </div>
+    <div id="inv-stats" class="statrow" style="display:none"></div>
+    <div id="inv-results"><div class="empty">加载中…</div></div>
+  </section>
 </main>
-<script src="common.js?v=5"></script><script src="app.js?v=8"></script>
+<script src="common.js?v=6"></script><script src="app.js?v=10"></script><script src="volumes.js?v=7"></script><script src="versions.js?v=9"></script><script src="inventory.js?v=6"></script>
+<script>
+  dmBindSidebar();
+  dmBindTheme();
+  dmFillProjects().then(() => dmBindViews());
+</script>
 </body>
 </html>

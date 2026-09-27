@@ -1,33 +1,4 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>图纸清册 · 工程图纸文件管理</title>
-<script>if(localStorage.dm_theme==='dark')document.documentElement.classList.add('dark')</script>
-<link rel="stylesheet" href="style.css?v=6">
-<style>
-  .statrow { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-  .stat { flex: 1; min-width: 140px; background: var(--card); border: 1px solid var(--line);
-          border-radius: 10px; padding: 12px 18px; text-align: center; }
-  .stat b { display: block; font-size: 26px; color: var(--accent); }
-  .stat span { color: var(--sub); font-size: 12.5px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
-  th { color: var(--sub); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
-  td.no { font-family: Consolas, monospace; font-size: 12.5px; }
-  .catcard > h3 .badge { font-size: 12px; }
-</style>
-</head>
-<body>
-<header>
-  <div style="flex:1"></div>
-  <button id="exportBtn" class="primary">⬇ 导出 Excel</button>
-</header>
-<main>
-  <div id="stats" class="statrow"></div>
-  <div id="results"><div class="empty">加载中…</div></div>
-</main>
-<script src="common.js?v=5"></script><script src="inventory.js?v=3"></script>
-</body>
-</html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<script>location.replace("index.html#inventory" + location.search)</script></head>
+<body></body></html>

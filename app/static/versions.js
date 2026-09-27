@@ -1,3 +1,4 @@
+(function () {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.round(n / 1024) + " KB";
 const fmtTime = (t) => new Date(t * 1000).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -179,7 +180,7 @@ function detail() {
 /* ---------- 渲染与事件 ---------- */
 
 function render() {
-  const box = document.getElementById("results");
+  const box = document.getElementById("ver-results");
   if (!data.groups.length) {
     box.innerHTML = `<div class="empty">暂无多版本图纸。<br><br>
       当同一图号的图纸在册文件夹里有多个文件时（如 xx-03.pdf 与 xx-03-2025.3.9修改说明.pdf），
@@ -206,11 +207,9 @@ function render() {
   };
 }
 
-dmBindSidebar();
-dmBindTheme();
-dmFillProjects();
-document.addEventListener("dmprojectchange", () => { selFolder = null; selVolume = null; loadAll().then(render); });
-
-loadAll()
-  .then(render)
-  .catch(e => { document.getElementById("results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+window.dmLoadVersions = function () {
+  loadAll()
+    .then(render)
+    .catch(e => { document.getElementById("ver-results").innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; });
+};
+})();

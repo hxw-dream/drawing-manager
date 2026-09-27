@@ -1,3 +1,4 @@
+(function () {
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -242,12 +243,10 @@ $("#sortDir").onclick = () => {
 };
 $("#scanBtn").onclick = startScan;
 
-dmBindSidebar();
-dmBindTheme();
-dmFillProjects();
-document.addEventListener("dmprojectchange", () => { if ($("#q").value.trim()) doSearch(); });
+window.dmLoadSearch = function () { if (lastData) renderResults(); };
 
 api("/api/scan/status").then(st => {
   if (st.last_root) { $("#root").value = st.last_root; $("#root").size = $("#root").value.length; }
   if (st.running || st.log.length) pollScan();
 }).catch(() => {});
+})();
