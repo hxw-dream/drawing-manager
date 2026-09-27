@@ -19,7 +19,7 @@
     aside.id = "sidebar";
     aside.className = "sidebar";
     aside.innerHTML = `
-      <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">图纸管理</span></div>
+      <div class="sb-logo" title="工程图纸文件管理">📐<span class="sb-label">功能总览</span></div>
       <div class="sb-proj"><select id="projSel" class="projsel" title="切换项目"></select></div>
       <nav class="sb-nav">
         ${NAVS.map(n => `<a class="sb-link" data-view="${n.hash}" href="#${n.hash}" title="${n.label}">${n.icon}<span class="sb-label">${n.label}</span></a>`).join("")}
