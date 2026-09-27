@@ -3,18 +3,26 @@
   const h = document.documentElement;
   if (localStorage.getItem("dm_theme") === "dark") h.classList.add("dark");
 
-  window.dmToggleTheme = function () {
-    const dark = h.classList.toggle("dark");
+  window.dmSetTheme = function (mode) {
+    const dark = mode === "dark";
+    h.classList.toggle("dark", dark);
     localStorage.setItem("dm_theme", dark ? "dark" : "light");
-    const b = document.getElementById("themeBtn");
-    if (b) b.textContent = dark ? "☀️" : "🌙";
+    const seg = document.getElementById("themeSeg");
+    if (seg) seg.querySelectorAll(".segopt").forEach(b =>
+      b.setAttribute("aria-pressed",
+        String((b.dataset.mode === "dark") === dark)));
   };
 
   window.dmBindTheme = function () {
-    const b = document.getElementById("themeBtn");
-    if (!b) return;
-    b.textContent = h.classList.contains("dark") ? "☀️" : "🌙";
-    b.onclick = window.dmToggleTheme;
+    const seg = document.getElementById("themeSeg");
+    if (!seg) return;
+    seg.querySelectorAll(".segopt").forEach(b => {
+      b.onclick = () => window.dmSetTheme(b.dataset.mode);
+    });
+    // 初始 aria 状态与当前主题对齐
+    seg.querySelectorAll(".segopt").forEach(b =>
+      b.setAttribute("aria-pressed",
+        String((b.dataset.mode === "dark") === h.classList.contains("dark"))));
   };
 
   window.dmCurrentProject = function () {
