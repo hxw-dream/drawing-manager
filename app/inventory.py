@@ -11,6 +11,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 
+from . import db as _db
 from . import versioning
 
 CATEGORIES = [    ("设计说明", ["设计说明", "说明书", "DESIGN SPECIFICATION", "SPECIFICATION"]),
@@ -33,14 +34,17 @@ def categorize(title: str) -> str:
     return "其他"
 
 
-def build_inventory(conn):
-    """聚合全部册的目录条目：类别、版本文件数、最新版文件名。"""
+def build_inventory(conn, project: int = 1):
+    """聚合指定项目的目录条目：类别、版本文件数、最新版文件名。"""
+    pf = None if project == 0 else _db.project_filter(project)  # 0 = 全部项目
     rows = conn.execute(
-        """SELECT e.id, e.seq, e.drawing_no, e.title, e.rev,
+        f"""SELECT e.id, e.seq, e.drawing_no, e.title, e.rev,
                   v.code, v.title AS volume_title, v.folder_name, v.folder_path,
                   v.date_tag, v.rev_tag, v.parse_status, v.project
            FROM entries e JOIN volumes v ON v.id=e.volume_id
-           ORDER BY v.code, e.drawing_no""").fetchall()
+           {f"WHERE ({pf})" if pf else ""}
+           ORDER BY v.code, e.drawing_no""",
+        {"pid": project} if pf else ()).fetchall()
     items = []
     for r in rows:
         files = conn.execute(
@@ -62,14 +66,17 @@ def build_inventory(conn):
             "folder_path": r["folder_path"],
         })
     cat_counts = Counter(i["category"] for i in items)
+    vf = f"WHERE ({pf})" if pf else ""
+    vparams = {"pid": project} if pf else ()
     entry_counts = dict(conn.execute(
-        "SELECT v.id, COUNT(e.id) FROM volumes v "
-        "LEFT JOIN entries e ON e.volume_id=v.id GROUP BY v.id").fetchall())
+        f"SELECT v.id, COUNT(e.id) FROM volumes v "
+        f"LEFT JOIN entries e ON e.volume_id=v.id {vf} GROUP BY v.id", vparams).fetchall())
     file_counts = dict(conn.execute(
-        "SELECT volume_id, COUNT(*) FROM files GROUP BY volume_id").fetchall())
+        f"SELECT volume_id, COUNT(*) FROM files GROUP BY volume_id").fetchall())
     vols = {}
     for vr in conn.execute(
-            "SELECT id, code, title, folder_name, folder_path, scan_root FROM volumes").fetchall():
+            f"SELECT id, code, title, folder_name, folder_path, scan_root FROM volumes v {vf}",
+            vparams).fetchall():
         vols[vr["folder_path"]] = {
             "code": vr["code"], "title": vr["title"] or vr["folder_name"],
             "path": vr["folder_path"], "scan_root": vr["scan_root"],

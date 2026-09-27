@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>册列表 · 工程图纸文件管理</title>
+<script>if(localStorage.dm_theme==='dark')document.documentElement.classList.add('dark')</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
   <h1>📚 册列表</h1>
-  <nav>
+  <nav><select id="projSel" class="projsel" title="切换项目"></select><button id="themeBtn" title="切换日间/夜间主题">🌙</button>
     <a href="index.html"><button>← 返回搜索</button></a>
     <a href="versions.html"><button>版本对比</button></a>
     <a href="inventory.html"><button>图纸清册</button></a>
@@ -19,6 +20,6 @@
 <main>
   <div id="results"><div class="empty">加载中…</div></div>
 </main>
-<script src="volumes.js?v=2"></script>
+<script src="common.js?v=1"></script><script src="volumes.js?v=3"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 """SQLite 存层：索引库只记录信息，从不改动用户图纸文件。"""
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 
@@ -62,7 +63,30 @@ CREATE TABLE IF NOT EXISTS folder_names (
     scan_root TEXT PRIMARY KEY,
     name TEXT NOT NULL           -- 导入文件夹的自定义显示名
 );
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,   -- 项目名
+    created_at REAL
+);
+CREATE TABLE IF NOT EXISTS folder_projects (
+    scan_root TEXT PRIMARY KEY,  -- 导入根目录 → 所属项目
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE
+);
 """
+
+
+def project_filter(pid: int, alias: str = "v") -> str:
+    """SQL 片段（按别名限定 volumes 表，需绑定 :pid 参数）。
+
+    项目隔离规则：默认项目(1)持有未映射来源的册（含历史数据），
+    其余项目只包含明确归入的文件夹，互不混淆。
+    """
+    return (
+        f"(({alias}.scan_root IS NULL OR {alias}.scan_root NOT IN "
+        "(SELECT fp.scan_root FROM folder_projects fp)) AND :pid = 1) "
+        f"OR {alias}.scan_root IN (SELECT fp.scan_root FROM folder_projects fp "
+        "WHERE fp.project_id = :pid)"
+    )
 
 
 def connect() -> sqlite3.Connection:
@@ -76,4 +100,7 @@ def connect() -> sqlite3.Connection:
     if "scan_root" not in cols:  # 旧库升级
         conn.execute("ALTER TABLE volumes ADD COLUMN scan_root TEXT")
         conn.commit()
+    conn.execute("INSERT OR IGNORE INTO projects(id, name, created_at) VALUES(1, '默认项目', ?)",
+                 (time.time(),))
+    conn.commit()
     return conn

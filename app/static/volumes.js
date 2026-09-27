@@ -3,6 +3,7 @@ const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || 
 
 let vols = null;
 let folderNames = {};   // scan_root -> 自定义显示名
+let projList = [];      // 全部项目
 let selFolder = null;   // 当前选中的图纸库文件夹（scan_root），null = 文件夹列表视图
 
 async function api(path, opts) {
@@ -16,7 +17,28 @@ function displayName(root) {
 }
 
 async function loadAll() {
-  [vols, folderNames] = await Promise.all([api("/api/volumes"), api("/api/folders")]);
+  const pid = dmCurrentProject();
+  [vols, folderNames, projList] = await Promise.all([
+    api("/api/volumes?project=" + pid), api("/api/folders"), api("/api/projects")]);
+}
+
+async function createProject() {
+  const name = prompt("新项目名称：");
+  if (!name || !name.trim()) return;
+  await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify({ name: name.trim() }) });
+  await dmFillProjects();
+  await loadAll(); render();
+}
+
+async function assignFolder(root, projectId) {
+  await api("/api/folders/assign", { method: "POST", headers: { "Content-Type": "application/json" },
+                                     body: JSON.stringify({ root, project_id: projectId }) });
+  if (projectId !== dmCurrentProject()) {  // 移走的文件夹从当前项目视图消失
+    selFolder = null;
+  }
+  await Promise.all([dmFillProjects(), loadAll()]);
+  render();
 }
 
 async function renameFolder(root) {
@@ -75,7 +97,11 @@ function folderList() {
     files: list.reduce((s, v) => s + v.file_count, 0),
     list,
   })).sort((a, b) => (a.root > b.root ? 1 : -1));
-  return `<div class="section-title">共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册</div>` +
+  const projOpts = projList.map(pr =>
+    `<option value="${pr.id}" ${pr.id === dmCurrentProject() ? "selected" : ""}>${esc(pr.name)}</option>`).join("");
+  return `<div class="section-title">
+    共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册
+    <button id="newProjBtn" style="margin-left:10px">＋ 新建项目</button></div>` +
     folders.map(f => `
     <div class="card volcard" data-key="${esc(f.root)}" style="cursor:pointer">
       <h3>🗂 ${esc(displayName(f.root))} <span class="badge">${f.list.length} 册</span></h3>
@@ -83,7 +109,9 @@ function folderList() {
       <div class="path">📁 ${esc(f.root || "（来源未记录的册，多为旧版索引遗留）")}</div>
       <div class="fileline">
         <span class="meta">点击查看该库的册 →</span>
-        ${f.root ? `<button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
+        ${f.root ? `<span class="meta">归入项目:</span>
+        <select class="assignSel" data-root="${esc(f.root)}">${projOpts}</select>
+        <button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
       </div>
     </div>`).join("");
 }
@@ -131,9 +159,20 @@ function render() {
   document.querySelectorAll(".renBtn").forEach(el => {
     el.onclick = (ev) => { ev.stopPropagation(); renameFolder(el.dataset.root); };
   });
+  document.querySelectorAll(".assignSel").forEach(el => {
+    el.value = String(dmCurrentProject());
+    el.onclick = (ev) => ev.stopPropagation();
+    el.onchange = () => assignFolder(el.dataset.root, parseInt(el.value, 10));
+  });
+  const npb = document.getElementById("newProjBtn");
+  if (npb) npb.onclick = (ev) => { ev.stopPropagation(); createProject(); };
   const back = document.getElementById("backLink");
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
+
+dmBindTheme();
+dmFillProjects();
+document.addEventListener("dmprojectchange", () => { selFolder = null; loadAll().then(render); });
 
 loadAll()
   .then(render)

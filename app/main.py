@@ -52,11 +52,25 @@ def _log(msg):
 
 class ScanReq(BaseModel):
     root: str
+    project_id: int = 1
 
 
 class FolderRenameReq(BaseModel):
     root: str
     name: str = ""
+
+
+class ProjectReq(BaseModel):
+    name: str
+
+
+class ProjectDelReq(BaseModel):
+    id: int
+
+
+class FolderAssignReq(BaseModel):
+    root: str
+    project_id: int
 
 
 class OpenReq(BaseModel):
@@ -70,11 +84,17 @@ def start_scan(req: ScanReq):
         if _scan_state["running"]:
             raise HTTPException(409, "扫描正在进行中")
         _scan_state.update(running=True, log=[], report=None, error=None)
-    root = req.root.strip().strip('"')
+    root = os.path.abspath(req.root.strip().strip('"'))
+    project_id = req.project_id or 1
 
     def run():
         try:
             _scan_state["report"] = scanner.scan_root(root, _log)
+            # 扫描完成后把根目录归入发起扫描时的项目（已有归属不动）
+            with db.connect() as conn:
+                conn.execute(
+                    """INSERT INTO folder_projects(scan_root, project_id) VALUES(?, ?)
+                       ON CONFLICT(scan_root) DO NOTHING""", (root, project_id))
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             CONFIG_PATH.write_text(json.dumps({"last_root": root}, ensure_ascii=False),
                                    encoding="utf-8")
@@ -101,15 +121,17 @@ def scan_status():
 
 
 @app.get("/api/volumes")
-def list_volumes():
+def list_volumes(project: int = 1):
+    pf = db.project_filter(project)
     with db.connect() as conn:
         scanner.purge_missing_volumes(conn)
         rows = conn.execute(
-            """SELECT v.*, COUNT(DISTINCT e.id) AS entry_count, COUNT(DISTINCT f.id) AS file_count
+            f"""SELECT v.*, COUNT(DISTINCT e.id) AS entry_count, COUNT(DISTINCT f.id) AS file_count
                FROM volumes v
                LEFT JOIN entries e ON e.volume_id=v.id
                LEFT JOIN files f ON f.volume_id=v.id
-               GROUP BY v.id ORDER BY v.code, v.date_tag""").fetchall()
+               WHERE ({pf})
+               GROUP BY v.id ORDER BY v.code, v.date_tag""", {"pid": project}).fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -147,29 +169,34 @@ def _match_score(hay: str, tokens) -> int:
 
 
 @app.get("/api/search")
-def search(q: str):
+def search(q: str, project: int = 1):
     tokens = [t for t in re.split(r"\s+", q.strip()) if t]
+    pf = db.project_filter(project)
     with db.connect() as conn:
         entry_rows = [dict(r) for r in conn.execute(
-            """SELECT e.id, e.seq, e.drawing_no, e.title, e.rev, e.page,
+            f"""SELECT e.id, e.seq, e.drawing_no, e.title, e.rev, e.page,
                       v.id AS volume_id, v.folder_name, v.folder_path, v.code,
                       v.title AS volume_title, v.date_tag, v.rev_tag, v.scanned_at,
                       v.project
-               FROM entries e JOIN volumes v ON v.id=e.volume_id""").fetchall()]
+               FROM entries e JOIN volumes v ON v.id=e.volume_id
+               WHERE ({pf})""", {"pid": project}).fetchall()]
         for r in entry_rows:
             r["files"] = [dict(f) for f in conn.execute(
                 "SELECT id, filename, path, ext, size, mtime FROM files WHERE matched_entry_id=?",
                 (r["id"],)).fetchall()]
         all_files = [dict(r) for r in conn.execute(
-            """SELECT f.id, f.filename, f.path, f.ext, f.size,
+            f"""SELECT f.id, f.filename, f.path, f.ext, f.size,
                       v.folder_name, v.folder_path, v.code, v.title AS volume_title,
                       v.date_tag, v.rev_tag, v.project
                FROM files f JOIN volumes v ON v.id=f.volume_id
-               WHERE f.matched_entry_id IS NULL AND f.filename <> v.ml_file""").fetchall()]
+               WHERE ({pf}) AND f.matched_entry_id IS NULL AND f.filename <> v.ml_file""",
+            {"pid": project}).fetchall()]
         volume_rows = [dict(r) for r in conn.execute(
-            """SELECT id, folder_name, folder_path, code, title, date_tag, rev_tag,
+            f"""SELECT id, folder_name, folder_path, code, title, date_tag, rev_tag,
                       project, parse_status, ml_file, ml_raw_text
-               FROM volumes""").fetchall()]
+               FROM volumes
+               WHERE ({db.project_filter(project, alias='volumes')})""",
+            {"pid": project}).fetchall()]
         for r in volume_rows:
             r["entry_count"] = conn.execute(
                 "SELECT COUNT(*) FROM entries WHERE volume_id=?", (r["id"],)).fetchone()[0]
@@ -235,13 +262,63 @@ def rename_folder(req: FolderRenameReq):
     return {"ok": True}
 
 
+@app.get("/api/projects")
+def list_projects():
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT p.id, p.name,
+                      (SELECT COUNT(*) FROM folder_projects fp WHERE fp.project_id=p.id) AS folders
+               FROM projects p ORDER BY p.id""").fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.post("/api/projects")
+def create_project(req: ProjectReq):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(400, "项目名不能为空")
+    with db.connect() as conn:
+        dup = conn.execute("SELECT id FROM projects WHERE name=?", (name,)).fetchone()
+        if dup:
+            raise HTTPException(409, f"项目「{name}」已存在")
+        cur = conn.execute("INSERT INTO projects(name, created_at) VALUES(?, ?)",
+                           (name, __import__("time").time()))
+        return {"id": cur.lastrowid, "name": name}
+
+
+@app.post("/api/projects/delete")
+def delete_project(req: ProjectDelReq):
+    if req.id == 1:
+        raise HTTPException(400, "默认项目不能删除")
+    with db.connect() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM folder_projects WHERE project_id=?",
+                         (req.id,)).fetchone()[0]
+        if n:
+            raise HTTPException(409, f"该项目下还有 {n} 个图纸文件夹，请先把它们归入其他项目")
+        conn.execute("DELETE FROM projects WHERE id=?", (req.id,))
+    return {"ok": True}
+
+
+@app.post("/api/folders/assign")
+def assign_folder(req: FolderAssignReq):
+    with db.connect() as conn:
+        if not conn.execute("SELECT id FROM projects WHERE id=?", (req.project_id,)).fetchone():
+            raise HTTPException(404, "目标项目不存在")
+        conn.execute(
+            """INSERT INTO folder_projects(scan_root, project_id) VALUES(?, ?)
+               ON CONFLICT(scan_root) DO UPDATE SET project_id=excluded.project_id""",
+            (req.root, req.project_id))
+    return {"ok": True}
+
+
 @app.get("/api/versions")
-def version_groups():
+def version_groups(project: int = 1):
     """同一图号挂了多个文件的，按版本时间线分组返回（旧→新）。"""
+    pf = db.project_filter(project)
     with db.connect() as conn:
         scanner.purge_missing_volumes(conn)
         rows = [dict(r) for r in conn.execute(
-            """SELECT e.id AS entry_id, e.drawing_no, e.title, e.rev,
+            f"""SELECT e.id AS entry_id, e.drawing_no, e.title, e.rev,
                       v.id AS volume_id, v.folder_name, v.folder_path, v.code,
                       v.title AS volume_title, v.date_tag AS vol_date, v.rev_tag AS vol_rev,
                       v.scan_root,
@@ -249,7 +326,8 @@ def version_groups():
                FROM entries e
                JOIN volumes v ON v.id = e.volume_id
                JOIN files f ON f.matched_entry_id = e.id
-               ORDER BY v.code, e.drawing_no""").fetchall()]
+               WHERE ({pf})
+               ORDER BY v.code, e.drawing_no""", {"pid": project}).fetchall()]
     groups = {}
     for r in rows:
         key = (r["volume_id"], r["drawing_no"])
@@ -276,16 +354,16 @@ def version_groups():
 
 
 @app.get("/api/inventory")
-def get_inventory():
+def get_inventory(project: int = 1):
     with db.connect() as conn:
         scanner.purge_missing_volumes(conn)
-        return inventory.build_inventory(conn)
+        return inventory.build_inventory(conn, project)
 
 
 @app.get("/api/inventory/export")
-def export_inventory():
+def export_inventory(project: int = 1):
     with db.connect() as conn:
-        inv = inventory.build_inventory(conn)
+        inv = inventory.build_inventory(conn, project)
     data = inventory.make_xlsx(inv)
     fname = f"图纸清册_{datetime.now():%Y%m%d_%H%M}.xlsx"
     return Response(

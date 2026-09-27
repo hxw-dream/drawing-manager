@@ -1,8 +1,18 @@
 :root {
   --bg: #f5f6f8; --card: #fff; --ink: #1c2330; --sub: #6b7484;
   --line: #e3e6eb; --accent: #0f62d6; --accent-soft: #e8f0fe;
-  --warn: #b45309; --ok: #15803d; --badge: #eef1f5;
+  --warn: #b45309; --ok: #15803d; --badge: #eef1f5; --soft: #fafbfc;
 }
+html.dark {
+  --bg: #0f1216; --card: #171c22; --ink: #e4e8ee; --sub: #8b96a5;
+  --line: #262d36; --accent: #5b9dff; --accent-soft: #1c2a40;
+  --warn: #f0b352; --ok: #4ade80; --badge: #222932; --soft: #12171d;
+}
+html.dark .badge.rev { background: #3a2d14; color: #f0b352; }
+html.dark .badge.new { background: #12331f; color: #4ade80; }
+html.dark .diff { background: #33270e; border-left-color: #b48324; color: #f0b352; }
+html.dark button.primary { background: var(--accent); border-color: var(--accent); color: #0f1216; }
+html.dark button.primary:hover { background: #7db0ff; color: #0f1216; }
 * { box-sizing: border-box; }
 body { margin: 0; font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
        background: var(--bg); color: var(--ink); }
@@ -12,7 +22,7 @@ header h1 { font-size: 17px; margin: 0 12px 0 0; white-space: nowrap; }
 header nav { display: flex; gap: 8px; }
 #scanbox { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 420px; }
 #root { flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
-        font-size: 13px; background: #fafbfc; }
+        font-size: 13px; background: var(--soft); }
 button { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line);
          background: var(--card); cursor: pointer; font-size: 13px; white-space: nowrap; }
 button:hover { border-color: var(--accent); color: var(--accent); }
@@ -41,7 +51,7 @@ main { max-width: 1000px; margin: 0 auto; padding: 20px 24px 60px; }
 .actions { display: flex; gap: 6px; }
 .actions button { padding: 3px 10px; font-size: 12.5px; }
 .empty { text-align: center; color: var(--sub); padding: 60px 0; }
-#scanstatus { max-height: 220px; overflow: auto; background: #fafbfc; border: 1px solid var(--line);
+#scanstatus { max-height: 220px; overflow: auto; background: var(--soft); border: 1px solid var(--line);
               border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;
               font: 12.5px/1.7 Consolas, monospace; white-space: pre-wrap; display: none; }
 .section-title { font-size: 13px; color: var(--sub); margin: 18px 0 10px; }
@@ -49,5 +59,8 @@ a { color: var(--accent); }
 .diff { background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 4px;
         padding: 4px 10px; margin: 4px 0; font-size: 12.5px; color: #92400e; }
 #sortbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.projsel { padding: 6px 8px; border: 1px solid var(--line);
+          border-radius: 6px; background: var(--card); color: var(--ink);
+          font-size: 13px; max-width: 200px; }
 #sortbar select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
                   background: var(--card); font-size: 13px; color: var(--ink); }

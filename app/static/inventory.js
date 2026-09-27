@@ -41,10 +41,14 @@ function catCards(inv) {
 }
 
 document.getElementById("exportBtn").onclick = () => {
-  window.location.href = "/api/inventory/export";
+  window.location.href = "/api/inventory/export?project=" + dmCurrentProject();
 };
 
-api("/api/inventory")
+dmBindTheme();
+dmFillProjects();
+document.addEventListener("dmprojectchange", () => location.reload());
+
+api("/api/inventory?project=" + dmCurrentProject())
   .then(inv => {
     if (!inv.items.length) {
       document.getElementById("results").innerHTML = `<div class="empty">索引为空，请先在主页扫描入库。</div>`;

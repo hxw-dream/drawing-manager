@@ -142,7 +142,7 @@ async function doSearch() {
   if (!q) { box.innerHTML = `<div class="empty">请输入关键字。</div>`; return; }
   box.innerHTML = `<div class="empty">搜索中…</div>`;
   try {
-    lastData = await api("/api/search?q=" + encodeURIComponent(q));
+    lastData = await api(`/api/search?q=${encodeURIComponent(q)}&project=${dmCurrentProject()}`);
     renderResults();
   } catch (e) { box.innerHTML = `<div class="empty">搜索出错: ${esc(e.message)}</div>`; }
 }
@@ -204,7 +204,7 @@ async function startScan() {
   $("#scanissues").style.display = "none";
   try {
     await api("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" },
-                             body: JSON.stringify({ root }) });
+                             body: JSON.stringify({ root, project_id: dmCurrentProject() }) });
   } catch (e) {
     const msg = String(e.message || "");
     if (msg.includes("进行中")) {          // 已有扫描在跑：直接跟进进度，不算失败
@@ -241,6 +241,10 @@ $("#sortDir").onclick = () => {
   renderResults();
 };
 $("#scanBtn").onclick = startScan;
+
+dmBindTheme();
+dmFillProjects();
+document.addEventListener("dmprojectchange", () => { if ($("#q").value.trim()) doSearch(); });
 
 api("/api/scan/status").then(st => {
   if (st.last_root) { $("#root").value = st.last_root; $("#root").size = $("#root").value.length; }

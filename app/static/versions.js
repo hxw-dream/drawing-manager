@@ -19,7 +19,8 @@ function displayName(root) {
 }
 
 async function loadAll() {
-  [data, folderNames] = await Promise.all([api("/api/versions"), api("/api/folders")]);
+  const pid = dmCurrentProject();
+  [data, folderNames] = await Promise.all([api("/api/versions?project=" + pid), api("/api/folders")]);
 }
 
 async function renameFolder(root) {
@@ -204,6 +205,10 @@ function render() {
     render();
   };
 }
+
+dmBindTheme();
+dmFillProjects();
+document.addEventListener("dmprojectchange", () => { selFolder = null; selVolume = null; loadAll().then(render); });
 
 loadAll()
   .then(render)
