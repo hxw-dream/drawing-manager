@@ -68,6 +68,11 @@ class ProjectDelReq(BaseModel):
     id: int
 
 
+class ProjectRenameReq(BaseModel):
+    id: int
+    name: str
+
+
 class FolderAssignReq(BaseModel):
     root: str
     project_id: int
@@ -284,6 +289,22 @@ def create_project(req: ProjectReq):
         cur = conn.execute("INSERT INTO projects(name, created_at) VALUES(?, ?)",
                            (name, __import__("time").time()))
         return {"id": cur.lastrowid, "name": name}
+
+
+@app.post("/api/projects/rename")
+def rename_project(req: ProjectRenameReq):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(400, "项目名不能为空")
+    with db.connect() as conn:
+        if not conn.execute("SELECT id FROM projects WHERE id=?", (req.id,)).fetchone():
+            raise HTTPException(404, "项目不存在")
+        dup = conn.execute("SELECT id FROM projects WHERE name=? AND id<>?",
+                           (name, req.id)).fetchone()
+        if dup:
+            raise HTTPException(409, f"项目「{name}」已存在")
+        conn.execute("UPDATE projects SET name=? WHERE id=?", (name, req.id))
+    return {"ok": True}
 
 
 @app.post("/api/projects/delete")

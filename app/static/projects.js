@@ -16,6 +16,20 @@
     if (window.dmFillProjects) await window.dmFillProjects();  // 侧边栏选择器同步
   }
 
+  async function renameProject(id, oldName) {
+    const name = prompt(`重命名项目「${oldName}」：`, oldName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === oldName) return;
+    try {
+      await api("/api/projects/rename", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name: trimmed }) });
+    } catch (e) { alert(String(e.message)); return; }
+    await load();
+    if (window.dmFillProjects) await window.dmFillProjects();
+  }
+
   async function deleteProject(id, name) {
     if (!confirm(`确定删除项目「${name}」？`)) return;
     try {
@@ -41,6 +55,7 @@
         </h3>
         <div class="meta">${p.folders} 个图纸文件夹归属此项目</div>
         <div class="fileline">
+          <button class="pj-ren" data-id="${p.id}" data-name="${esc(p.name)}">✏️ 重命名</button>
           ${!isDefault ? `<button class="pj-del" data-id="${p.id}" data-name="${esc(p.name)}">🗑 删除</button>` : ""}
         </div>
       </div>`;
@@ -66,6 +81,9 @@
       e => { if (e.key === "Enter") document.getElementById("newProjGo").click(); });
     box().querySelectorAll(".pj-del").forEach(b => {
       b.onclick = () => deleteProject(parseInt(b.dataset.id, 10), b.dataset.name);
+    });
+    box().querySelectorAll(".pj-ren").forEach(b => {
+      b.onclick = () => renameProject(parseInt(b.dataset.id, 10), b.dataset.name);
     });
   }
 
