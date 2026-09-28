@@ -76,3 +76,27 @@ def test_pdf_ml_preferred_over_dwg(tmp_db, tmp_path):
     # 双 ML 场景：DWG 那份不算"未入目录的散文件"
     r = client.get("/api/search", params={"q": "ML.dwg", "project": 1}).json()
     assert r["loose_files"] == []
+
+
+def test_delete_whole_folder_and_restore_all(tmp_db, sample_library):
+    _scan_until_done(str(sample_library))
+    root = str(sample_library)
+    before = len(client.get("/api/volumes", params={"project": 1}).json())
+    assert before == 2
+
+    r = client.post("/api/folders/delete", json={"root": root}).json()
+    assert r["removed"] == 2
+    assert client.get("/api/volumes", params={"project": 1}).json() == []
+    assert len(client.get("/api/volumes/ignored").json()) == 2
+
+    _scan_until_done(root)  # 重扫不回来
+    assert client.get("/api/volumes", params={"project": 1}).json() == []
+
+    for g in client.get("/api/volumes/ignored").json():  # 全部恢复
+        client.post("/api/volumes/restore", json={"folder_path": g["folder_path"]})
+    _scan_until_done(root)
+    assert len(client.get("/api/volumes", params={"project": 1}).json()) == 2
+    # 空路径/未知路径保护
+    assert client.post("/api/folders/delete", json={"root": "  "}).status_code == 400
+    assert client.post("/api/folders/delete",
+                       json={"root": r"D:\不存在"}).status_code == 404

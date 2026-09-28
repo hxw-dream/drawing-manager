@@ -355,6 +355,10 @@ class VolumePathReq(BaseModel):
     folder_path: str
 
 
+class FolderPathReq(BaseModel):
+    root: str
+
+
 @app.post("/api/volumes/delete")
 def delete_volume(req: VolumePathReq):
     """从索引移除一册（不删磁盘文件）：重扫跳过，可恢复。"""
@@ -372,6 +376,27 @@ def delete_volume(req: VolumePathReq):
                VALUES(?, ?, ?) ON CONFLICT(folder_path) DO NOTHING""",
             (path, row["folder_name"], row["scan_root"]))
     return {"ok": True}
+
+
+@app.post("/api/folders/delete")
+def delete_folder(req: FolderPathReq):
+    """把一个导入文件夹下的全部册移出索引（逐册入忽略表，可恢复）。"""
+    root = req.root.strip()
+    if not root:
+        raise HTTPException(400, "文件夹路径不能为空")
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT folder_path, folder_name, scan_root FROM volumes WHERE scan_root=?",
+            (root,)).fetchall()
+        if not rows:
+            raise HTTPException(404, "该文件夹下没有已入库的册")
+        for r in rows:
+            conn.execute("DELETE FROM volumes WHERE folder_path=?", (r["folder_path"],))
+            conn.execute(
+                """INSERT INTO ignored_volumes(folder_path, folder_name, scan_root)
+                   VALUES(?, ?, ?) ON CONFLICT(folder_path) DO NOTHING""",
+                (r["folder_path"], r["folder_name"], r["scan_root"]))
+    return {"removed": len(rows)}
 
 
 @app.post("/api/volumes/restore")

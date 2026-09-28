@@ -36,6 +36,28 @@ async function removeVolume(path, name) {
   await loadAll(); render();
 }
 
+async function removeFolder(root) {
+  const name = displayName(root);
+  if (!confirm(`确定把「${name}」下的全部册从索引移除？
+只移出索引，不删除磁盘文件；重扫不会自动恢复，可在下方"已移除"区恢复。`)) return;
+  try {
+    const r = await api("/api/folders/delete", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ root }) });
+    await loadAll(); render();
+  } catch (e) { alert(String(e.message)); }
+}
+
+async function restoreAll() {
+  if (!confirm("恢复全部已移除的册？恢复后需重新扫描入库。")) return;
+  for (const g of ignored) {
+    await api("/api/volumes/restore", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path: g.folder_path }) });
+  }
+  await loadAll(); render();
+}
+
 async function restoreVolume(path) {
   await api("/api/volumes/restore", { method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -121,7 +143,8 @@ function folderList() {
   const projOpts = projList.map(pr =>
     `<option value="${pr.id}" ${pr.id === dmCurrentProject() ? "selected" : ""}>${esc(pr.name)}</option>`).join("");
   const ignoredHtml = ignored.length ? `
-    <div class="section-title">已从索引移除的册（${ignored.length}）——恢复后需重新扫描入库</div>` +
+    <div class="section-title">已从索引移除的册（${ignored.length}）
+      <button id="restoreAllBtn" style="margin-left:10px">↩ 全部恢复</button></div>` +
     ignored.map(g => `
     <div class="card">
       <h3>🚫 ${esc(g.folder_name)}</h3>
@@ -138,7 +161,8 @@ function folderList() {
         <span class="meta">点击查看该库的册 →</span>
         ${f.root ? `<span class="meta">归入项目:</span>
         <select class="assignSel" data-root="${esc(f.root)}">${projOpts}</select>
-        <button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
+        <button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>
+        <button class="fol-del" data-root="${esc(f.root)}" data-name="${esc(displayName(f.root))}">🗑 删除全部</button>` : ""}
       </div>
     </div>`).join("") + ignoredHtml;
 }
@@ -199,6 +223,11 @@ function render() {
   document.querySelectorAll(".vol-restore").forEach(el => {
     el.onclick = () => restoreVolume(el.dataset.path);
   });
+  document.querySelectorAll(".fol-del").forEach(el => {
+    el.onclick = (ev) => { ev.stopPropagation(); removeFolder(el.dataset.root); };
+  });
+  const rab = document.getElementById("restoreAllBtn");
+  if (rab) rab.onclick = restoreAll;
   document.querySelectorAll(".assignSel").forEach(el => {
     el.value = String(dmCurrentProject());
     el.onclick = (ev) => ev.stopPropagation();
