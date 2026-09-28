@@ -3,6 +3,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<":
 const baseName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 
 let vols = null;
+let ignored = [];       // 已从索引移除的册
 let folderNames = {};   // scan_root -> 自定义显示名
 let projList = [];      // 全部项目
 let selFolder = null;   // 当前选中的图纸库文件夹（scan_root），null = 文件夹列表视图
@@ -19,8 +20,27 @@ function displayName(root) {
 
 async function loadAll() {
   const pid = dmCurrentProject();
-  [vols, folderNames, projList] = await Promise.all([
-    api("/api/volumes?project=" + pid), api("/api/folders"), api("/api/projects")]);
+  [vols, folderNames, projList, ignored] = await Promise.all([
+    api("/api/volumes?project=" + pid), api("/api/folders"),
+    api("/api/projects"), api("/api/volumes/ignored")]);
+}
+
+async function removeVolume(path, name) {
+  if (!confirm(`确定把「${name}」从索引移除？
+只移出索引，不删除磁盘文件；重扫不会自动恢复，可在此处恢复。`)) return;
+  try {
+    await api("/api/volumes/delete", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path: path }) });
+  } catch (e) { alert(String(e.message)); return; }
+  await loadAll(); render();
+}
+
+async function restoreVolume(path) {
+  await api("/api/volumes/restore", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder_path: path }) });
+  await loadAll(); render();
 }
 
 async function createProject() {
@@ -100,6 +120,14 @@ function folderList() {
   })).sort((a, b) => (a.root > b.root ? 1 : -1));
   const projOpts = projList.map(pr =>
     `<option value="${pr.id}" ${pr.id === dmCurrentProject() ? "selected" : ""}>${esc(pr.name)}</option>`).join("");
+  const ignoredHtml = ignored.length ? `
+    <div class="section-title">已从索引移除的册（${ignored.length}）——恢复后需重新扫描入库</div>` +
+    ignored.map(g => `
+    <div class="card">
+      <h3>🚫 ${esc(g.folder_name)}</h3>
+      <div class="path">📁 ${esc(g.folder_path)}</div>
+      <div class="fileline"><button class="vol-restore" data-path="${esc(g.folder_path)}">↩ 恢复</button></div>
+    </div>`).join("") : "";
   return `<div class="section-title">共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册</div>` +
     folders.map(f => `
     <div class="card volcard" data-key="${esc(f.root)}" style="cursor:pointer">
@@ -112,7 +140,7 @@ function folderList() {
         <select class="assignSel" data-root="${esc(f.root)}">${projOpts}</select>
         <button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>` : ""}
       </div>
-    </div>`).join("");
+    </div>`).join("") + ignoredHtml;
 }
 
 /* ---------- 视图二：该文件夹下的册 ---------- */
@@ -142,7 +170,10 @@ function volumeList() {
         v.parse_status !== "ok" ? `<span class="badge rev">${esc(v.parse_status)}</span>` : ""])}</div>
       <div class="path">📁 ${esc(v.folder_path)}</div>
       ${v.ml_file ? `<div class="fileline"><span class="fname">📑 目录文件: ${esc(v.ml_file)}</span><span class="actions" data-path="${esc(v.ml_path || (v.folder_path + "\\" + v.ml_file))}"></span></div>` : ""}
-      <div class="fileline"><span class="actions" data-path="${esc(v.folder_path)}" data-folder="1"></span></div>
+      <div class="fileline">
+        <span class="actions" data-path="${esc(v.folder_path)}" data-folder="1"></span>
+        <button class="vol-del" data-path="${esc(v.folder_path)}" data-name="${esc(v.title || v.folder_name)}">🗑 从索引移除</button>
+      </div>
     </div>`).join("");
 }
 
@@ -161,6 +192,12 @@ function render() {
   });
   document.querySelectorAll(".renBtn").forEach(el => {
     el.onclick = (ev) => { ev.stopPropagation(); renameFolder(el.dataset.root); };
+  });
+  document.querySelectorAll(".vol-del").forEach(el => {
+    el.onclick = () => removeVolume(el.dataset.path, el.dataset.name);
+  });
+  document.querySelectorAll(".vol-restore").forEach(el => {
+    el.onclick = () => restoreVolume(el.dataset.path);
   });
   document.querySelectorAll(".assignSel").forEach(el => {
     el.value = String(dmCurrentProject());

@@ -89,13 +89,14 @@ def start_scan(req: ScanReq):
     with _scan_lock:
         if _scan_state["running"]:
             raise HTTPException(409, "扫描正在进行中")
-        _scan_state.update(running=True, log=[], report=None, error=None)
+        _scan_state.update(running=True, log=[], report=None, error=None, stop_requested=False)
     root = os.path.abspath(req.root.strip().strip('"'))
     project_id = req.project_id or 1
 
     def run():
         try:
-            _scan_state["report"] = scanner.scan_root(root, _log)
+            _scan_state["report"] = scanner.scan_root(
+                root, _log, should_stop=lambda: _scan_state.get("stop_requested"))
             # 扫描完成后把根目录归入发起扫描时的项目（已有归属不动）
             with db.connect() as conn:
                 conn.execute(
@@ -112,6 +113,15 @@ def start_scan(req: ScanReq):
 
     threading.Thread(target=run, daemon=True).start()
     return {"started": True, "root": root}
+
+
+@app.post("/api/scan/stop")
+def stop_scan():
+    if not _scan_state["running"]:
+        raise HTTPException(409, "当前没有正在进行的扫描")
+    _scan_state["stop_requested"] = True
+    _log("⏹ 已请求停止，当前册解析完成后中止…")
+    return {"ok": True}
 
 
 @app.get("/api/scan/status")
@@ -225,6 +235,8 @@ def search(q: str, project: int = 1):
             r.pop("_score", None)
         return out
 
+    from .scanner import is_ml_file as _is_ml
+    all_files = [f for f in all_files if not _is_ml(f["filename"])]  # ML 目录文件不算散文件
     matched_entries = pick(
         entry_rows,
         lambda r: _haystack(r["drawing_no"], r["title"]),
@@ -337,6 +349,45 @@ def assign_folder(req: FolderAssignReq):
                ON CONFLICT(scan_root) DO UPDATE SET project_id=excluded.project_id""",
             (req.root, req.project_id))
     return {"ok": True}
+
+
+class VolumePathReq(BaseModel):
+    folder_path: str
+
+
+@app.post("/api/volumes/delete")
+def delete_volume(req: VolumePathReq):
+    """从索引移除一册（不删磁盘文件）：重扫跳过，可恢复。"""
+    path = req.folder_path.strip()
+    if not path:
+        raise HTTPException(400, "册路径不能为空")
+    with db.connect() as conn:
+        row = conn.execute("SELECT folder_name, scan_root FROM volumes WHERE folder_path=?",
+                           (path,)).fetchone()
+        if not row:
+            raise HTTPException(404, "该册不在索引中")
+        conn.execute("DELETE FROM volumes WHERE folder_path=?", (path,))
+        conn.execute(
+            """INSERT INTO ignored_volumes(folder_path, folder_name, scan_root)
+               VALUES(?, ?, ?) ON CONFLICT(folder_path) DO NOTHING""",
+            (path, row["folder_name"], row["scan_root"]))
+    return {"ok": True}
+
+
+@app.post("/api/volumes/restore")
+def restore_volume(req: VolumePathReq):
+    with db.connect() as conn:
+        conn.execute("DELETE FROM ignored_volumes WHERE folder_path=?", (req.folder_path,))
+    return {"ok": True}
+
+
+@app.get("/api/volumes/ignored")
+def list_ignored():
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT folder_path, folder_name, scan_root FROM ignored_volumes ORDER BY folder_name"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 @app.get("/api/versions")

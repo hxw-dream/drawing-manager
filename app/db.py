@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS folder_names (
     scan_root TEXT PRIMARY KEY,
     name TEXT NOT NULL           -- 导入文件夹的自定义显示名
 );
+CREATE TABLE IF NOT EXISTS ignored_volumes (
+    folder_path TEXT PRIMARY KEY,  -- 手动从索引移除的册（重扫跳过，可恢复）
+    folder_name TEXT,
+    scan_root TEXT
+);
 CREATE TABLE IF NOT EXISTS parse_cache (
     ml_path TEXT PRIMARY KEY,     -- ML 文件绝对路径
     sig TEXT NOT NULL,            -- 内容指纹（大小+修改时间）

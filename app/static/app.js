@@ -185,6 +185,8 @@ async function pollScan() {
   el.textContent = st.log.join("\n") || (st.running ? "扫描启动中…" : "");
   el.scrollTop = el.scrollHeight;
   $("#scanBtn").disabled = st.running;
+  const sb = $("#stopBtn");
+  if (sb) { sb.style.display = st.running ? "inline-block" : "none"; sb.disabled = false; }
   if (!st.running) {
     clearInterval(pollTimer); pollTimer = null;
     if (st.error) el.textContent += `\n✗ ${st.error}`;
@@ -244,6 +246,12 @@ document.addEventListener("DOMContentLoaded", () => {
     renderResults();
   };
   $("#scanBtn").onclick = startScan;
+  $("#stopBtn").onclick = async () => {
+    $("#stopBtn").disabled = true;
+    try { await api("/api/scan/stop", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: "{}" }); }
+    catch (e) { alert(String(e.message)); $("#stopBtn").disabled = false; }
+  };
 
   api("/api/scan/status").then(st => {
     if (st.last_root) $("#root").value = st.last_root;

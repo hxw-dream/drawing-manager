@@ -123,6 +123,9 @@ def scan_volume(conn, folder: str, log, root=None):
     code, title, date_tag, rev_tag = parse_folder_name(folder_name)
     names = sorted(os.listdir(folder))
     ml_files = [n for n in names if is_ml_file(n)]
+    pdfs = sorted(n for n in ml_files if n.lower().endswith(".pdf"))
+    if pdfs:  # 同时存在 PDF 与 DWG 目录文件时，优先识别 PDF
+        ml_files = pdfs[:1] + [n for n in ml_files if n not in pdfs]
     other_files = [n for n in names if os.path.isfile(os.path.join(folder, n))]
 
     row = {
@@ -209,7 +212,7 @@ def scan_volume(conn, folder: str, log, root=None):
             (vid, f["filename"], f["path"], f["ext"], f["size"], f["mtime"],
              f["matched_entry_id"]))
     unmatched = [f["filename"] for f in files_rows if f["matched_entry_id"] is None
-                 and f["filename"] != row["ml_file"]]
+                 and not is_ml_file(f["filename"])]
     return {"folder": folder, "status": row["parse_status"],
             "reason": row["parse_error"], "ml_file": row["ml_file"],
             "entries": len(entries), "files": len(files_rows),
@@ -226,7 +229,7 @@ def purge_missing_volumes(conn):
     return gone
 
 
-def scan_root(root: str, log=print):
+def scan_root(root: str, log=print, should_stop=None):
     """递归扫描 root 下所有册。log 为进度回调。"""
     root = os.path.abspath(root)
     if not os.path.isdir(root):
@@ -245,7 +248,16 @@ def scan_root(root: str, log=print):
     report["found"] = len(targets)
     log(f"发现 {len(targets)} 个含 -ML 目录文件的文件夹")
     with db.connect() as conn:
+        ignored = {r["folder_path"] for r in
+                   conn.execute("SELECT folder_path FROM ignored_volumes").fetchall()}
         for folder in sorted(targets):
+            if folder in ignored:
+                log(f"  [skip] {os.path.basename(folder)}: 已手动从索引移除（可在册列表恢复）")
+                continue
+            if should_stop and should_stop():
+                report["stopped"] = True
+                log("⏹ 收到停止请求，本次扫描中止（已入库的册保留，未扫的下次继续）")
+                break
             try:
                 v = scan_volume(conn, folder, log, root=root)
             except Exception as ex:
