@@ -53,3 +53,14 @@ def test_scan_root_records_scan_root(tmp_db, sample_library):
     with connect() as conn:
         roots = {r[0] for r in conn.execute("SELECT DISTINCT scan_root FROM volumes")}
     assert roots == {str(sample_library)}
+
+
+def test_match_prefers_exact_over_containment():
+    """X-12.pdf 不能被 X-1 条目靠包含匹配错抢（回归用例）。"""
+    entries = [{"_id": 1, "drawing_no": "X-1"}, {"_id": 2, "drawing_no": "X-12"}]
+    files = [{"filename": "X-12.pdf", "matched_entry_id": None},
+             {"filename": "X-1.pdf", "matched_entry_id": None}]
+    scanner._match_files_to_entries(entries, files)
+    by_id = {e["_id"]: e["drawing_no"] for e in entries}
+    assert by_id[files[0]["matched_entry_id"]] == "X-12"
+    assert by_id[files[1]["matched_entry_id"]] == "X-1"

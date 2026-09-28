@@ -72,3 +72,14 @@ def test_host_guard_and_inventory_export(tmp_db, sample_library):
     assert resp.status_code == 200
     assert resp.content[:2] == b"PK"  # xlsx 是 zip 包
     assert "spreadsheetml" in resp.headers["content-type"]
+
+
+def test_search_blank_query_returns_nothing(tmp_db, sample_library):
+    _scan_until_done(str(sample_library))
+    r = client.get("/api/search", params={"q": "   "}).json()
+    assert r["entry_groups"] == [] and r["volume_hits"] == []
+
+
+def test_rename_rejects_empty_root(tmp_db):
+    assert client.post("/api/folders/rename",
+                       json={"root": "  ", "name": "x"}).status_code == 400

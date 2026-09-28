@@ -177,6 +177,8 @@ def _match_score(hay: str, tokens) -> int:
 @app.get("/api/search")
 def search(q: str, project: int = 1):
     tokens = [t for t in re.split(r"\s+", q.strip()) if t]
+    if not tokens:
+        return {"q": q, "entry_groups": [], "loose_files": [], "volume_hits": []}
     pf = db.project_filter(project)
     with db.connect() as conn:
         entry_rows = [dict(r) for r in conn.execute(
@@ -256,6 +258,8 @@ def get_folder_names():
 
 @app.post("/api/folders/rename")
 def rename_folder(req: FolderRenameReq):
+    if not req.root.strip():
+        raise HTTPException(400, "文件夹路径不能为空")
     name = req.name.strip()
     with db.connect() as conn:
         if name:
@@ -323,6 +327,8 @@ def delete_project(req: ProjectDelReq):
 
 @app.post("/api/folders/assign")
 def assign_folder(req: FolderAssignReq):
+    if not req.root.strip():
+        raise HTTPException(400, "文件夹路径不能为空")
     with db.connect() as conn:
         if not conn.execute("SELECT id FROM projects WHERE id=?", (req.project_id,)).fetchone():
             raise HTTPException(404, "目标项目不存在")

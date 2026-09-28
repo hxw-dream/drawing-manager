@@ -63,15 +63,18 @@ def _match_files_to_entries(entries, files_rows):
     all_nos = {normalize_no(e["drawing_no"]) for e in entries}
     for f in files_rows:
         stem = normalize_no(Path(f["filename"]).stem)
-        hit = None
-        for e in entries:
-            no = normalize_no(e["drawing_no"])
-            if stem == no or stem.endswith("-" + no) or no in stem:
-                hit = e
-                if stem != no and stem not in all_nos and re.fullmatch(r"\d{1,2}", stem[len(no):]):
-                    e["drawing_no"] = stem  # OCR 掉尾数字，按文件名愈合
-                    e["_healed"] = True
-                break
+        # 先全量找精确匹配（避免 X-1 靠包含错抢 X-12.pdf），找不到再做包含匹配
+        hit = next((e for e in entries
+                    if normalize_no(e["drawing_no"]) == stem), None)
+        if hit is None:
+            for e in entries:
+                no = normalize_no(e["drawing_no"])
+                if stem.endswith("-" + no) or no in stem:
+                    hit = e
+                    if stem not in all_nos and re.fullmatch(r"\d{1,2}", stem[len(no):]):
+                        e["drawing_no"] = stem  # OCR 掉尾数字，按文件名愈合
+                        e["_healed"] = True
+                    break
         if hit is None:
             stem_last = stem.rsplit("-", 1)[-1]
             if stem_last.isdigit():
