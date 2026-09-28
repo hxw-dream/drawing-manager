@@ -118,7 +118,11 @@ function folderList() {
 /* ---------- 视图二：该文件夹下的册 ---------- */
 
 function volumeList() {
-  const list = vols.filter(v => (v.scan_root || "") === selFolder);
+  let list = vols.filter(v => (v.scan_root || "") === selFolder);
+  if (!list.length && selFolder) {  // 所选文件夹不属于当前项目（切换项目后），回退到文件夹列表
+    selFolder = null;
+    return volumeList();
+  }
   return `
   <div class="section-title"><a href="#" id="backLink">← 返回文件夹列表</a></div>
   <div class="card">
@@ -166,6 +170,8 @@ function render() {
   const back = document.getElementById("backLink");
   if (back) back.onclick = (e) => { e.preventDefault(); selFolder = null; render(); };
 }
+
+document.addEventListener("dmprojectchange", () => { selFolder = null; });
 
 window.dmLoadVolumes = function () {
   loadAll()

@@ -88,6 +88,10 @@ function folderList() {
 
 function volumeList() {
   const groups = data.groups.filter(g => (g.scan_root || "") === selFolder);
+  if (!groups.length && selFolder) {
+    selFolder = null;
+    return volumeList();
+  }
   const byVol = {};
   for (const g of groups) {
     (byVol[g.folder_path] = byVol[g.folder_path] || {
@@ -140,6 +144,10 @@ function diffLine(v, prev) {
 
 function detail() {
   const groups = data.groups.filter(g => g.folder_path === selVolume);
+  if (!groups.length && selVolume) {
+    selVolume = null;
+    return detail();
+  }
   const head = groups[0];
   return `
   <div class="section-title"><a href="#" id="backLink">← 返回${esc(displayName(selFolder))}的册列表</a></div>
@@ -206,6 +214,8 @@ function render() {
     render();
   };
 }
+
+document.addEventListener("dmprojectchange", () => { selFolder = null; selVolume = null; });
 
 window.dmLoadVersions = function () {
   loadAll()
