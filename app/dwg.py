@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 
 ODA_CANDIDATES = [
     r"D:\Program Files\ODA\ODAFileConverter 27.1.0\ODAFileConverter.exe",

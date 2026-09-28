@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS folder_names (
     scan_root TEXT PRIMARY KEY,
     name TEXT NOT NULL           -- 导入文件夹的自定义显示名
 );
+CREATE TABLE IF NOT EXISTS parse_cache (
+    ml_path TEXT PRIMARY KEY,     -- ML 文件绝对路径
+    sig TEXT NOT NULL,            -- 内容指纹（大小+修改时间）
+    entries_json TEXT NOT NULL,   -- 解析出的目录条目
+    header_json TEXT,             -- 表头元数据（工程名/册名/参考号）
+    raw_text TEXT,                -- 全文（兜底搜索用）
+    method TEXT                   -- text | ocr | dwg
+);
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,   -- 项目名

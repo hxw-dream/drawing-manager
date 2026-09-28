@@ -1,4 +1,5 @@
 """扫描根目录：识别册（含 -ML 文件的文件夹）→ 解析 ML → 索引文件并匹配图号。"""
+import json
 import os
 import re
 import time
@@ -8,6 +9,7 @@ from pathlib import Path
 from . import db
 from .parser_ml import parse_ml
 from .versioning import normalize_no
+
 
 # 目录文件命名约定：按 -_ 切分后存在 ML 段（如 F10001-D0401-ML.pdf）
 def is_ml_file(filename: str) -> bool:
@@ -21,11 +23,13 @@ def parse_folder_name(name: str):
     """D0401【综合办公楼照明施工图】-2024.5.7-改明敷 → 各字段。
     兼容 D0403(1)【…】 这类带括号批次号的写法，图册号取括号前的主体。"""
     code = title = date_tag = rev_tag = None
+    raw_code = None
     m = re.match(r"^\s*([A-Za-z0-9]{2,}(?:[（(]\d+[）)])?)\s*【", name)
     if not m:
         m = re.match(r"^\s*([A-Za-z0-9]{2,}(?:[（(]\d+[）)])?)\s*[-_ ]", name)
     if m:
-        code = re.sub(r"[（(]\d+[）)]$", "", m.group(1)).upper()
+        raw_code = m.group(1)
+        code = re.sub(r"[（(]\d+[）)]$", "", raw_code).upper()
     m = re.search(r"【([^】]+)】", name)
     if m:
         title = m.group(1).strip()
@@ -37,7 +41,7 @@ def parse_folder_name(name: str):
     else:
         date_raw = None
     rest = name
-    for part in [code or "", (f"【{title}】" if title else ""), date_raw or ""]:
+    for part in [raw_code or code or "", (f"【{title}】" if title else ""), date_raw or ""]:
         if part:
             rest = rest.replace(part, " ", 1)
     pieces = []
@@ -79,6 +83,38 @@ def _match_files_to_entries(entries, files_rows):
             f["matched_entry_id"] = hit["_id"]
 
 
+def _ml_fingerprint(path: str) -> str:
+    st = os.stat(path)
+    return f"{st.st_size}:{st.st_mtime_ns}"
+
+
+def parse_ml_cached(conn, ml_path: str) -> dict:
+    """ML 解析结果按文件指纹缓存：内容未变直接复用，跳过 OCR/DXF 解析。
+
+    两百册量级的例行重扫因此从数十分钟降到秒级。"""
+    ml_path = os.path.abspath(ml_path)
+    sig = _ml_fingerprint(ml_path)
+    hit = conn.execute(
+        "SELECT entries_json, header_json, raw_text, method FROM parse_cache "
+        "WHERE ml_path=? AND sig=?", (ml_path, sig)).fetchone()
+    if hit:
+        entries = json.loads(hit["entries_json"])
+        return {"entries": entries,
+                "header": json.loads(hit["header_json"] or "null") or {},
+                "raw_text": hit["raw_text"] or "", "method": hit["method"],
+                "parse_status": "ok" if entries else "empty"}
+    parsed = parse_ml(ml_path)
+    conn.execute(
+        """INSERT INTO parse_cache(ml_path, sig, entries_json, header_json, raw_text, method)
+           VALUES(?,?,?,?,?,?)
+           ON CONFLICT(ml_path) DO UPDATE SET sig=excluded.sig, entries_json=excluded.entries_json,
+             header_json=excluded.header_json, raw_text=excluded.raw_text, method=excluded.method""",
+        (ml_path, sig, json.dumps(parsed["entries"], ensure_ascii=False),
+         json.dumps(parsed["header"], ensure_ascii=False),
+         parsed["raw_text"][:60000], parsed["method"]))
+    return parsed
+
+
 def scan_volume(conn, folder: str, log, root=None):
     folder_name = os.path.basename(folder.rstrip("\\/"))
     code, title, date_tag, rev_tag = parse_folder_name(folder_name)
@@ -101,7 +137,7 @@ def scan_volume(conn, folder: str, log, root=None):
         log(f"  [skip] {folder_name}: 未找到 -ML 目录文件")
     else:
         try:
-            parsed = parse_ml(os.path.join(folder, ml_files[0]))
+            parsed = parse_ml_cached(conn, os.path.join(folder, ml_files[0]))
             entries = parsed["entries"]
             row["parse_status"] = parsed["parse_status"]
             row["parse_method"] = parsed["method"]

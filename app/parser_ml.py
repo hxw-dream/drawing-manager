@@ -205,7 +205,7 @@ def parse_ml_pdf_text(path: str):
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
             t = page.extract_text() or ""
-            lines.extend(l.strip() for l in t.splitlines() if l.strip())
+            lines.extend(ln.strip() for ln in t.splitlines() if ln.strip())
     if not lines:
         return None
     header = {}
@@ -258,8 +258,8 @@ def parse_ml_pdf_ocr(path: str):
 
 def parse_ml_dwg(path: str):
     """路径3：DWG/DXF 目录文件 → ODA 转 DXF → 提取文字实体 → 行解析。"""
-    import tempfile
     import shutil
+    import tempfile
 
     from . import dwg as dwg_mod
 

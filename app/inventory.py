@@ -16,7 +16,7 @@ from . import versioning
 
 CATEGORIES = [    ("设计说明", ["设计说明", "说明书", "DESIGN SPECIFICATION", "SPECIFICATION"]),
     ("材料设备清册", ["材料", "清册", "设备表", "EQUIPMENT AND MATERIAL", "MATERIAL LIST", "BILL OF"]),
-    ("防雷接地", ["防雷", "接地", "LPS", "EARTHING", "GROUNDING"]),
+    ("防雷接地", ["防雷", "避雷", "接地", "LPS", "EARTHING", "GROUNDING"]),
     ("电缆敷设", ["电缆", "敷设", "桥架", "CABLE"]),
     ("照明安装", ["照明", "LIGHTING"]),
     ("配电装置安装", ["配电", "开关柜", "POWER DISTRIBUTION", "SWITCHGEAR"]),
@@ -72,7 +72,7 @@ def build_inventory(conn, project: int = 1):
         f"SELECT v.id, COUNT(e.id) FROM volumes v "
         f"LEFT JOIN entries e ON e.volume_id=v.id {vf} GROUP BY v.id", vparams).fetchall())
     file_counts = dict(conn.execute(
-        f"SELECT volume_id, COUNT(*) FROM files GROUP BY volume_id").fetchall())
+        "SELECT volume_id, COUNT(*) FROM files GROUP BY volume_id").fetchall())
     vols = {}
     for vr in conn.execute(
             f"SELECT id, code, title, folder_name, folder_path, scan_root FROM volumes v {vf}",
@@ -160,7 +160,7 @@ def make_xlsx(inv) -> bytes:
         for r in range(1, ws.max_row + 1):
             for c in range(1, len(cols) + 1):
                 ws.cell(row=r, column=c).border = border
-        for c, w in zip(range(1, 10), [6, 12, 40, 12, 11, 12, 8, 8, 14]):
+        for c, w in zip(range(1, 10), [6, 12, 40, 12, 11, 12, 8, 8, 14], strict=False):
             ws.column_dimensions[get_column_letter(c)].width = w
 
     # ---- 每个导入文件夹一张清册工作表 ----
@@ -182,7 +182,7 @@ def make_xlsx(inv) -> bytes:
         ws2.append([n, i["category"], i["code"], i["volume_title"], i["drawing_no"],
                     i["title"], i["rev"], i["file_count"], i["latest_file"] or "",
                     i["folder_path"]])
-    for c, w in zip(range(1, 11), [6, 14, 10, 24, 20, 36, 8, 10, 40, 50]):
+    for c, w in zip(range(1, 11), [6, 14, 10, 24, 20, 36, 8, 10, 40, 50], strict=False):
         ws2.column_dimensions[get_column_letter(c)].width = w
 
     # ---- Sheet 3: 分类统计 ----
@@ -204,7 +204,7 @@ def make_xlsx(inv) -> bytes:
     ws3.append(["合计", total, "100%"])
     for c in range(1, 4):
         ws3.cell(row=ws3.max_row, column=c).font = bold
-    for c, w in zip("ABC", [30, 12, 10]):
+    for c, w in zip("ABC", [30, 12, 10], strict=False):
         ws3.column_dimensions[c].width = w
 
     bio = BytesIO()

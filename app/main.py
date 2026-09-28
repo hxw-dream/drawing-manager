@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -287,7 +288,7 @@ def create_project(req: ProjectReq):
         if dup:
             raise HTTPException(409, f"项目「{name}」已存在")
         cur = conn.execute("INSERT INTO projects(name, created_at) VALUES(?, ?)",
-                           (name, __import__("time").time()))
+                           (name, time.time()))
         return {"id": cur.lastrowid, "name": name}
 
 
