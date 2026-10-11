@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
-    <img src="docs/banner-light.svg" alt="工程图纸文件管理系统 —— 本地图纸库：目录识别、秒级检索、版本对比、清册导出">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg?v=2">
+    <img src="docs/banner-light.svg?v=2" alt="工程图纸文件管理系统 —— 本地图纸库：目录识别、秒级检索、版本对比、清册导出">
   </picture>
 </p>
 <p align="center">
