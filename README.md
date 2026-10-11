@@ -1,3 +1,15 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
+    <img src="docs/banner-light.svg" alt="工程图纸文件管理系统 —— 本地图纸库：目录识别、秒级检索、版本对比、清册导出">
+  </picture>
+</p>
+<p align="center">
+  <a href="https://github.com/hxw-dream/drawing-manager/actions/workflows/ci.yml"><img src="https://github.com/hxw-dream/drawing-manager/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/hxw-dream/drawing-manager/releases"><img src="https://img.shields.io/github/v/release/hxw-dream/drawing-manager?include_prereleases&label=%E7%89%88%E6%9C%AC" alt="版本"></a>
+  <img src="https://img.shields.io/badge/%E8%BF%90%E8%A1%8C%E6%96%B9%E5%BC%8F-%E5%AE%8C%E5%85%A8%E6%9C%AC%E5%9C%B0-blue" alt="完全本地">
+</p>
+
 # 工程图纸文件管理（drawing-manager）
 
 本地网页应用：扫描本地图纸库，识别每册的 `-ML` 目录文件，建立可搜索索引，
