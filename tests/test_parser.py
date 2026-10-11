@@ -1,10 +1,10 @@
-"""ML 解析器黄金用例：三份真实目录文件（扫描件/双语表头/全角括号图号）。
+"""ML 解析器黄金用例：三份合成目录文件（扫描件/双语表头/全角括号图号）。
 
-这些用例固化了历史上踩过的解析回归：
+合成件由 tools/make_synthetic_fixtures.py 生成（版式复刻真实工程目录页），
+固化了历史上踩过的解析回归：
 - 表头关键词误匹配标题栏（BOOK/PAGE）
-- 中文候选优先（D0406 英文表头）
-- 全角括号图号（D0403 的 F10001-D0403（1）-XX）
-- OCR 掉尾数字的文件名愈合
+- 中文候选优先（双语表头）
+- 全角括号图号（F10001-D0403（1）-XX 曾整册解析失败）
 """
 from pathlib import Path
 
@@ -30,16 +30,15 @@ def test_is_drawing_no(text, expected):
 
 
 def test_parse_scanned_bilingual():
-    """D0401：扫描件 OCR，双语表头，4 条目录。"""
-    r = parse_ml(str(FIX / "ml-D0401-scanned.pdf"))
+    """合成扫描件：OCR 管道，双语表头，4 条目录。"""
+    r = parse_ml(str(FIX / "ml-demo-lighting-scanned.pdf"))
     assert r["parse_status"] == "ok" and r["method"] == "ocr"
     nos = [e["drawing_no"] for e in r["entries"]]
     assert nos == ["F10001-D0401-01", "F10001-D0401-02",
                    "F10001-D0401-03", "F10001-D0401-04"]
     titles = " ".join(e["title"] for e in r["entries"])
     assert "设计说明" in titles
-    assert "取水配电间照明布置图" in titles
-    assert "取水泵房照明布置图" in titles
+    assert "照明布置图" in titles
     assert "材料设备清册" in titles
     assert all(e["rev"] == "00" for e in r["entries"])
     assert r["header"]["volume_name"] == "综合办公楼照明施工图"
@@ -48,18 +47,18 @@ def test_parse_scanned_bilingual():
 
 
 def test_parse_fullwidth_drawing_no():
-    """D0403：全角括号图号曾经整册解析失败（回归用例）。"""
-    r = parse_ml(str(FIX / "ml-D0403-fullwidth.pdf"))
+    """全角括号图号曾整册解析失败（回归用例）。"""
+    r = parse_ml(str(FIX / "ml-demo-fullwidth-scanned.pdf"))
     assert r["parse_status"] == "ok"
     nos = [e["drawing_no"] for e in r["entries"]]
-    assert len(nos) >= 8
+    assert len(nos) >= 5
     assert all(n.startswith("F10001-D0403(1)-") for n in nos), nos
     assert r["header"]["volume_name"] == "电控楼照明检修接线图"
 
 
-def test_parse_d1210_volume():
-    """D0402：6 条目录，中文册名取自 ML。"""
-    r = parse_ml(str(FIX / "ml-D0402-scanned.pdf"))
+def test_parse_cable_volume():
+    """六条目册：中文册名取自 ML。"""
+    r = parse_ml(str(FIX / "ml-demo-cable-scanned.pdf"))
     assert r["parse_status"] == "ok"
     assert len(r["entries"]) == 6
-    assert r["header"]["volume_name"] == "化水系统电缆敷设施工图"
+    assert r["header"]["volume_name"] == "化学水系统电缆敷设施工图"

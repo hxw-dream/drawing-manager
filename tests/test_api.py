@@ -22,13 +22,13 @@ def test_full_flow_search_and_versions(tmp_db, sample_library):
     st = _scan_until_done(str(sample_library))
     assert st["report"]["ok"] == 2
 
-    # 分字匹配：不连续的"取水照明"
-    r = client.get("/api/search", params={"q": "取水照明", "project": 1}).json()
+    # 分字匹配：不连续的"照明布置"
+    r = client.get("/api/search", params={"q": "照明布置", "project": 1}).json()
     assert r["entry_groups"]
     first = r["entry_groups"][0]
-    assert "取水" in first["versions"][0]["title"]
+    assert "照明" in first["versions"][0]["title"]
 
-    # 版本对比：D0401-02 有两版
+    # 版本对比：D0401-02 多版本
     v = client.get("/api/versions", params={"project": 1}).json()
     g = next(x for x in v["groups"] if x["drawing_no"] == "F10001-D0401-02")
     assert len(g["versions"]) == 2
@@ -49,8 +49,8 @@ def test_project_isolation(tmp_db, sample_library, tmp_path):
     in_p1 = client.get("/api/volumes", params={"project": 1}).json()
     assert len(in_p2) == 2 and len(in_p1) == 0
     # 搜索同步隔离
-    s1 = client.get("/api/search", params={"q": "取水", "project": 1}).json()
-    s2 = client.get("/api/search", params={"q": "取水", "project": pj["id"]}).json()
+    s1 = client.get("/api/search", params={"q": "照明", "project": 1}).json()
+    s2 = client.get("/api/search", params={"q": "照明", "project": pj["id"]}).json()
     assert not s1["entry_groups"] and s2["entry_groups"]
 
 

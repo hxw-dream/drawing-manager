@@ -11,8 +11,8 @@ def test_categorize_priority():
     assert categorize("THE LIST OF MAIN EQUIPMENT AND MATERIAL 材料设备清册") == "材料设备清册"
     assert categorize("行政办公楼屋顶避雷带布置图") == "防雷接地"
     assert categorize("CHEMICAL STORAGE ROOM CABLE TRAY LAYOUT") == "电缆敷设"
-    assert categorize("取水泵房照明布置图") == "照明安装"
-    assert categorize("取水PC配电室低压配电装置和变压器安装图") == "配电装置安装"
+    assert categorize("XX泵房照明布置图") == "照明安装"
+    assert categorize("XX配电室低压配电装置和变压器安装图") == "配电装置安装"
     assert categorize("某某接线图 WIRING") == "电气接线"
     assert categorize("不知什么图") == "其他"
     # 优先级：说明/清册 在布局类词之前

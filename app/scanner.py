@@ -159,7 +159,7 @@ def scan_volume(conn, folder: str, log, root=None):
             if not row["code"] and row["volume_ref_no"]:
                 row["code"] = re.sub(r"[（(]\d+[）)]", "",
                                      normalize_no(row["volume_ref_no"]).rsplit("-", 1)[-1])
-            # 纯图号命名的文件夹（如内层 "D0406"）不会把图号本身当修订标记
+            # 纯图号命名的文件夹（如内层 "D0401"）不会把图号本身当修订标记
             if row["rev_tag"] and row["code"] and row["rev_tag"].upper() == row["code"]:
                 row["rev_tag"] = None
             if entries:

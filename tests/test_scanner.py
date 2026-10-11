@@ -10,7 +10,7 @@ def test_parse_folder_name():
         "D0401", "综合办公楼照明施工图", "2024.05.07", "改明敷")
     assert parse_folder_name("D0401【综合办公楼照明施工图】") == (
         "D0401", "综合办公楼照明施工图", None, None)
-    code, _t, _d, rev = parse_folder_name("D0403(1)【电控楼照明检修】-2024.7.5")
+    code, _t, _d, rev = parse_folder_name("D0403(1)【电控楼照明检修接线图】-2024.7.5")
     assert code == "D0403" and rev is None  # 括号批次号并入图册号，不进修订标记
 
 

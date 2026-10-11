@@ -63,7 +63,7 @@ def test_delete_and_restore_volume(tmp_db, sample_library):
 def test_pdf_ml_preferred_over_dwg(tmp_db, tmp_path):
     root = tmp_path / "tuzhi"
     root.mkdir()
-    vol = make_volume(root, "D0401【综合办公楼照明施工图】-2024.5.7-改明敷", "ml-D0401-scanned.pdf")
+    vol = make_volume(root, "D0401【综合办公楼照明施工图】-2024.5.7-改明敷", "ml-demo-lighting-scanned.pdf")
     # 同册再放入一个 DWG 目录文件：应仍按 PDF 解析
     (vol / "F10001-D0401-ML.dwg").write_bytes(b"fake dwg")
     st = _scan_until_done(str(root))
