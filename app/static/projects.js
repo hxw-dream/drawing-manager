@@ -64,7 +64,7 @@
       <div class="card">
         <h3>➕ 新建项目</h3>
         <div id="newprojrow" style="display:flex;gap:8px;margin-top:6px">
-          <input id="newProjName" placeholder="项目名称，如：XX电厂项目" style="flex:1;padding:8px 10px;font-size:13px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink)">
+          <input id="newProjName" placeholder="项目名称，如：xxx电厂项目" style="flex:1;padding:8px 10px;font-size:13px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink)">
           <button id="newProjGo" class="primary">创建项目</button>
         </div>
         <div class="meta" style="margin-top:6px">新建后在「册列表」把图纸文件夹归入项目；扫描入库时也会自动归入当前选中的项目</div>
