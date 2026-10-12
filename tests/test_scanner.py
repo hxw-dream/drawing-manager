@@ -39,12 +39,15 @@ def test_rescan_is_idempotent(tmp_db, sample_library):
 
 
 def test_purge_missing_volumes(tmp_db, tmp_path):
-    with connect() as conn:  # 直接造指向不存在路径的记录，验证清理逻辑本身
+    root = tmp_path / "library"
+    root.mkdir()
+    with connect() as conn:
         for n in ("X1", "X2"):
             conn.execute(
-                """INSERT INTO volumes(folder_path, folder_name, parse_status)
-                   VALUES(?, ?, 'ok')""", (str(tmp_path / "gone" / n), n))
-        assert len(scanner.purge_missing_volumes(conn)) == 2
+                """INSERT INTO volumes(folder_path, folder_name, scan_root, parse_status)
+                   VALUES(?, ?, ?, 'ok')""", (str(root / "gone" / n), n, str(root)))
+    with connect() as conn:
+        assert len(scanner.purge_missing_volumes(conn, str(root))) == 2
         assert conn.execute("SELECT COUNT(*) FROM volumes").fetchone()[0] == 0
 
 

@@ -1,7 +1,7 @@
 """解析每册的 ML 目录文件（PDF）。
 
 两条路径：
-1. 文字层 PDF：pdfplumber 直接取文本行；
+1. 文字层 PDF：pdfplumber 提取文字坐标，按图号及表头列解析；
 2. 扫描件：pypdfium2 渲染成图 → RapidOCR → 按坐标聚类成表格行。
 
 统一输出 entries（图号/图名/版本等）和 header（工程名/册名等），
@@ -9,6 +9,7 @@ raw_text 全文保留，即使列解析失败也能被关键字搜索命中。
 """
 import logging
 import re
+import unicodedata
 from pathlib import Path
 
 from .versioning import normalize_no
@@ -198,33 +199,94 @@ def _parse_ocr_boxes(boxes, x_margin=100.0):
     return entries, header
 
 
+def _boxes_from_pdf_words(words):
+    """文字坐标换算到 OCR 的 300 DPI 尺度，复用图号锚点/列解析。"""
+    scale = 300 / 72
+    boxes = [{"x0": w["x0"] * scale, "x1": w["x1"] * scale,
+              "y0": w["top"] * scale, "y1": w["bottom"] * scale,
+              "cy": (w["top"] + w["bottom"]) / 2 * scale, "text": w["text"]}
+             for w in words]
+    # pdfplumber 会把 DRAWING NO./FILE NAME 等英文表头拆成多个词。
+    phrases = [kw for kws in HEADER_KEYWORDS.values() for kw in kws if " " in kw]
+    phrases += [lb for lb in LABEL_PROJECT + LABEL_VOLNAME if " " in lb]
+    for phrase in phrases:
+        parts = phrase.split()
+        for first in list(boxes):
+            if _norm_token(first["text"]).rstrip(".") != _norm_token(parts[0]):
+                continue
+            group = [first]
+            for part in parts[1:]:
+                prev = group[-1]
+                candidates = [b for b in boxes if b not in group
+                              and _norm_token(b["text"]).rstrip(".") == _norm_token(part)
+                              and abs(b["cy"] - prev["cy"]) < 20
+                              and -4 <= b["x0"] - prev["x1"] < 120]
+                if not candidates:
+                    break
+                group.append(min(candidates, key=lambda b: b["x0"]))
+            if len(group) == len(parts):
+                for b in group:
+                    boxes.remove(b)
+                boxes.append({"x0": first["x0"], "x1": group[-1]["x1"],
+                              "y0": min(b["y0"] for b in group),
+                              "y1": max(b["y1"] for b in group),
+                              "cy": first["cy"], "text": phrase})
+    return boxes
+
+
+_DRAWING_IN_LINE = re.compile(
+    r"(?<![A-Z0-9])(?:[A-Z0-9]+(?:\(\d+\))?\s*-\s*){2,}\d{1,4}(?![A-Z0-9])", re.I)
+
+
+def _entries_from_text_lines(lines):
+    """坐标无法定位图号时，从行中提取图号；保留图名中的数字。"""
+    entries = []
+    for line in lines:
+        line = unicodedata.normalize("NFKC", line).replace("—", "-")
+        for m in _DRAWING_IN_LINE.finditer(line):
+            no = _norm_token(m.group())
+            if not _is_drawing_no(no):
+                continue
+            before, after = line[:m.start()].strip(), line[m.end():].strip(" |")
+            seq = before if re.fullmatch(r"\d{1,3}", before) else None
+            entries.append({"drawing_no": no, "seq": seq, "title": after,
+                            "rev": None, "page": None, "remark": ""})
+    return entries
+
+
 def parse_ml_pdf_text(path: str):
-    """路径1：文字层 PDF。"""
+    """路径1：文字层 PDF，按图号框定位条目，而非把整行当作图号。"""
     import pdfplumber
-    lines, entries = [], []
+    lines, entries, header, seen = [], [], {}, set()
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
-            t = page.extract_text() or ""
-            lines.extend(ln.strip() for ln in t.splitlines() if ln.strip())
-    if not lines:
+            text = page.extract_text() or ""
+            page_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            lines.extend(page_lines)
+            boxes = _boxes_from_pdf_words(page.extract_words())
+            page_entries, page_header = _parse_ocr_boxes(boxes, x_margin=0)
+            if not page_entries:
+                page_entries = _entries_from_text_lines(page_lines)
+            for entry in page_entries:
+                if entry["drawing_no"] not in seen:
+                    entries.append(entry)
+                    seen.add(entry["drawing_no"])
+            for key, value in page_header.items():
+                if value and not header.get(key):
+                    header[key] = value
+    if not lines and not entries:
         return None
-    header = {}
-    for line in lines:
-        norm = _norm_token(line)
-        if not _is_drawing_no(norm):
-            continue
-        rest = line.upper().replace(norm, " ", 1)
-        nums = re.findall(r"\b(\d{1,3})\b", rest)
-        title = re.sub(r"\b\d{1,3}\b", " ", rest)
-        title = re.sub(r"[-|/\s]{2,}", " ", title).strip(" -|/")
-        entries.append({"drawing_no": norm, "seq": nums[0] if nums else None,
-                        "title": title, "rev": None, "page": None, "remark": ""})
+    # 标签值优先用完整文本行，避免 PROJECT/册名被拆成多个词后只取到首词。
     for labels, key in ((LABEL_PROJECT, "project"), (LABEL_VOLNAME, "volume_name")):
+        pattern = "|".join(re.escape(lb) for lb in sorted(labels, key=len, reverse=True))
         for i, line in enumerate(lines):
-            if any(_norm_token(lb) in _norm_token(line) for lb in labels):
-                val = re.sub("|".join(labels), "", line, flags=re.I).strip(" :-")
-                if not val and i + 1 < len(lines):
-                    val = lines[i + 1]
+            match = re.match(rf"^({pattern})(?=$|[\s:：\-\u4e00-\u9fff])(.*)$", line, re.I)
+            if not match:
+                continue
+            val = match.group(2).strip(" :：-")
+            if not val and i + 1 < len(lines):
+                val = lines[i + 1]
+            if val:
                 header[key] = val
                 break
     return {"entries": entries, "header": header,

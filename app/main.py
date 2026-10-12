@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -17,7 +18,14 @@ from pydantic import BaseModel
 
 from . import db, inventory, scanner, versioning
 
-app = FastAPI(title="工程图纸文件管理")
+
+@asynccontextmanager
+async def lifespan(app):
+    db.initialize()
+    yield
+
+
+app = FastAPI(title="工程图纸文件管理", lifespan=lifespan)
 
 _ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
@@ -140,7 +148,6 @@ def scan_status():
 def list_volumes(project: int = 1):
     pf = db.project_filter(project)
     with db.connect() as conn:
-        scanner.purge_missing_volumes(conn)
         rows = conn.execute(
             f"""SELECT v.*, COUNT(DISTINCT e.id) AS entry_count, COUNT(DISTINCT f.id) AS file_count
                FROM volumes v
@@ -420,7 +427,6 @@ def version_groups(project: int = 1):
     """同一图号挂了多个文件的，按版本时间线分组返回（旧→新）。"""
     pf = db.project_filter(project)
     with db.connect() as conn:
-        scanner.purge_missing_volumes(conn)
         rows = [dict(r) for r in conn.execute(
             f"""SELECT e.id AS entry_id, e.drawing_no, e.title, e.rev,
                       v.id AS volume_id, v.folder_name, v.folder_path, v.code,
@@ -460,7 +466,6 @@ def version_groups(project: int = 1):
 @app.get("/api/inventory")
 def get_inventory(project: int = 1):
     with db.connect() as conn:
-        scanner.purge_missing_volumes(conn)
         return inventory.build_inventory(conn, project)
 
 

@@ -128,6 +128,19 @@ function verMeta(v, extra = []) {
 
 /* ---------- 视图一：导入的图纸库文件夹 ---------- */
 
+function ignoredList() {
+  if (!ignored.length) return "";
+  return `
+    <div class="section-title">已从索引移除的册（${ignored.length}）
+      <button id="restoreAllBtn" style="margin-left:10px">↩ 全部恢复</button></div>` +
+    ignored.map(g => `
+    <div class="card">
+      <h3>🚫 ${esc(g.folder_name)}</h3>
+      <div class="path">📁 ${esc(g.folder_path)}</div>
+      <div class="fileline"><button class="vol-restore" data-path="${esc(g.folder_path)}">↩ 恢复</button></div>
+    </div>`).join("");
+}
+
 function folderList() {
   const byRoot = {};
   for (const v of vols) {
@@ -142,15 +155,6 @@ function folderList() {
   })).sort((a, b) => (a.root > b.root ? 1 : -1));
   const projOpts = projList.map(pr =>
     `<option value="${pr.id}" ${pr.id === dmCurrentProject() ? "selected" : ""}>${esc(pr.name)}</option>`).join("");
-  const ignoredHtml = ignored.length ? `
-    <div class="section-title">已从索引移除的册（${ignored.length}）
-      <button id="restoreAllBtn" style="margin-left:10px">↩ 全部恢复</button></div>` +
-    ignored.map(g => `
-    <div class="card">
-      <h3>🚫 ${esc(g.folder_name)}</h3>
-      <div class="path">📁 ${esc(g.folder_path)}</div>
-      <div class="fileline"><button class="vol-restore" data-path="${esc(g.folder_path)}">↩ 恢复</button></div>
-    </div>`).join("") : "";
   return `<div class="section-title">共导入 ${folders.length} 个图纸库文件夹，点击进入查看该库的册</div>` +
     folders.map(f => `
     <div class="card volcard" data-key="${esc(f.root)}" style="cursor:pointer">
@@ -164,17 +168,13 @@ function folderList() {
         <button class="renBtn" data-root="${esc(f.root)}">✏️ 重命名</button>
         <button class="fol-del" data-root="${esc(f.root)}" data-name="${esc(displayName(f.root))}">🗑 删除全部</button>` : ""}
       </div>
-    </div>`).join("") + ignoredHtml;
+    </div>`).join("");
 }
 
 /* ---------- 视图二：该文件夹下的册 ---------- */
 
 function volumeList() {
   let list = vols.filter(v => (v.scan_root || "") === selFolder);
-  if (!list.length && selFolder) {  // 所选文件夹不属于当前项目（切换项目后），回退到文件夹列表
-    selFolder = null;
-    return volumeList();
-  }
   return `
   <div class="section-title"><a href="#" id="backLink">← 返回文件夹列表</a></div>
   <div class="card">
@@ -205,11 +205,12 @@ function volumeList() {
 
 function render() {
   const box = document.getElementById("vol-results");
-  if (!vols.length) {
-    box.innerHTML = `<div class="empty">索引为空，请先在主页扫描入库。</div>`;
-    return;
-  }
-  box.innerHTML = selFolder ? volumeList() : folderList();
+  if (selFolder && !vols.some(v => (v.scan_root || "") === selFolder)) selFolder = null;
+  const emptyHint = ignored.length ? "索引为空，可恢复下方已移除的册后重扫，或导入新的图纸库。"
+    : "索引为空，请先扫描入库。";
+  const content = vols.length ? (selFolder ? volumeList() : folderList())
+    : `<div class="empty">${emptyHint}</div>`;
+  box.innerHTML = content + ignoredList();
   bindActions();
   document.querySelectorAll(".volcard").forEach(el => {
     el.onclick = () => { selFolder = el.dataset.key; render(); window.scrollTo(0, 0); };

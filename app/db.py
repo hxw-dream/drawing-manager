@@ -1,7 +1,9 @@
 """SQLite 存层：索引库只记录信息，从不改动用户图纸文件。"""
 import sqlite3
 import sys
+import threading
 import time
+from contextlib import closing
 from pathlib import Path
 
 
@@ -14,6 +16,8 @@ def _base_dir() -> Path:
 
 DATA_DIR = _base_dir() / "data"
 DB_PATH = DATA_DIR / "index.db"
+_init_lock = threading.Lock()
+_initialized_db = None
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS volumes (
@@ -102,18 +106,33 @@ def project_filter(pid: int, alias: str = "v") -> str:
     )
 
 
-def connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def _open_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(SCHEMA)
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(volumes)")}
-    if "scan_root" not in cols:  # 旧库升级
-        conn.execute("ALTER TABLE volumes ADD COLUMN scan_root TEXT")
-        conn.commit()
-    conn.execute("INSERT OR IGNORE INTO projects(id, name, created_at) VALUES(1, '默认项目', ?)",
-                 (time.time(),))
-    conn.commit()
     return conn
+
+
+def initialize():
+    """每个索引库只初始化一次，避免读取接口为建表/默认项目争抢写锁。"""
+    global _initialized_db
+    target = DB_PATH.resolve()
+    with _init_lock:
+        if _initialized_db == target and target.exists():
+            return
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with closing(_open_connection()) as conn, conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(SCHEMA)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(volumes)")}
+            if "scan_root" not in cols:  # 旧库升级
+                conn.execute("ALTER TABLE volumes ADD COLUMN scan_root TEXT")
+            conn.execute(
+                "INSERT OR IGNORE INTO projects(id, name, created_at) VALUES(1, '默认项目', ?)",
+                (time.time(),))
+        _initialized_db = target
+
+
+def connect() -> sqlite3.Connection:
+    initialize()  # 兼容直接调用扫描器及测试，不依赖 Web 服务启动。
+    return _open_connection()

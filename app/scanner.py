@@ -2,7 +2,9 @@
 import json
 import os
 import re
+import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -54,32 +56,54 @@ def parse_folder_name(name: str):
 
 
 def _match_files_to_entries(entries, files_rows):
-    """文件名 ↔ 目录条目匹配：先整体图号匹配，退化为末段序号匹配。
+    """匹配完整图号边界，优先最长图号；有歧义时保留为未匹配。
 
-    图号愈合：OCR 偶尔会吃掉图号末尾的数字（如 -01 识别成 -0）。
-    当某条目的图号恰好等于某文件名去掉末尾 1~2 位数字、且没有其他
-    条目精确对应这个文件名时，用文件名（人工命名，更可靠）纠正图号。
+    OCR 掉尾数字只在原版文件能唯一补全、且不存在精确条目时纠正。
+    先愈合再匹配，避免修订文件排在原版前面时漏掉版本关联。
     """
     all_nos = {normalize_no(e["drawing_no"]) for e in entries}
+    stems = {normalize_no(Path(f["filename"]).stem) for f in files_rows}
+    proposals = []
+    for e in entries:
+        no = normalize_no(e["drawing_no"])
+        if not no or no in stems:
+            continue
+        completions = [s for s in stems if s not in all_nos and s.startswith(no)
+                       and re.fullmatch(r"\d{1,2}", s[len(no):])]
+        if len(completions) == 1:
+            proposals.append((e, completions[0]))
+    for e, stem in proposals:
+        if sum(s == stem for _, s in proposals) == 1:
+            e["drawing_no"] = stem
+            e["_healed"] = True
+
+    def matches(no, stem):
+        if not no:
+            return False
+        for m in re.finditer(re.escape(no), stem):
+            before = stem[m.start() - 1] if m.start() else ""
+            after = stem[m.end()] if m.end() < len(stem) else ""
+            if not re.search(r"[A-Z0-9]", before + after):
+                return True
+        return False
+
     for f in files_rows:
         stem = normalize_no(Path(f["filename"]).stem)
-        # 先全量找精确匹配（避免 X-1 靠包含错抢 X-12.pdf），找不到再做包含匹配
-        hit = next((e for e in entries
-                    if normalize_no(e["drawing_no"]) == stem), None)
-        if hit is None:
-            for e in entries:
-                no = normalize_no(e["drawing_no"])
-                if stem.endswith("-" + no) or no in stem:
-                    hit = e
-                    if stem not in all_nos and re.fullmatch(r"\d{1,2}", stem[len(no):]):
-                        e["drawing_no"] = stem  # OCR 掉尾数字，按文件名愈合
-                        e["_healed"] = True
-                    break
-        if hit is None:
+        exact = [e for e in entries if normalize_no(e["drawing_no"]) == stem]
+        candidates = exact or [e for e in entries
+                               if matches(normalize_no(e["drawing_no"]), stem)]
+        hit = None
+        if candidates:
+            longest = max(len(normalize_no(e["drawing_no"])) for e in candidates)
+            best = [e for e in candidates if len(normalize_no(e["drawing_no"])) == longest]
+            if len(best) == 1 and all(normalize_no(e["drawing_no"]) in
+                                      normalize_no(best[0]["drawing_no"]) for e in candidates):
+                hit = best[0]
+        else:
             stem_last = stem.rsplit("-", 1)[-1]
             if stem_last.isdigit():
                 cands = [e for e in entries
-                         if e["drawing_no"].rsplit("-", 1)[-1] == stem_last]
+                         if normalize_no(e["drawing_no"]).rsplit("-", 1)[-1] == stem_last]
                 if len(cands) == 1:
                     hit = cands[0]
         if hit is not None:
@@ -88,7 +112,9 @@ def _match_files_to_entries(entries, files_rows):
 
 def _ml_fingerprint(path: str) -> str:
     st = os.stat(path)
-    return f"{st.st_size}:{st.st_mtime_ns}"
+    # 文字 PDF 解析规则升级后，旧缓存须重新识别一次。
+    version = "text-v2:" if Path(path).suffix.lower() == ".pdf" else ""
+    return f"{version}{st.st_size}:{st.st_mtime_ns}"
 
 
 def parse_ml_cached(conn, ml_path: str) -> dict:
@@ -107,14 +133,15 @@ def parse_ml_cached(conn, ml_path: str) -> dict:
                 "raw_text": hit["raw_text"] or "", "method": hit["method"],
                 "parse_status": "ok" if entries else "empty"}
     parsed = parse_ml(ml_path)
-    conn.execute(
-        """INSERT INTO parse_cache(ml_path, sig, entries_json, header_json, raw_text, method)
-           VALUES(?,?,?,?,?,?)
-           ON CONFLICT(ml_path) DO UPDATE SET sig=excluded.sig, entries_json=excluded.entries_json,
-             header_json=excluded.header_json, raw_text=excluded.raw_text, method=excluded.method""",
-        (ml_path, sig, json.dumps(parsed["entries"], ensure_ascii=False),
-         json.dumps(parsed["header"], ensure_ascii=False),
-         parsed["raw_text"][:60000], parsed["method"]))
+    with conn:  # OCR 已完成；缓存写入立即提交，不把写锁带入下一册解析。
+        conn.execute(
+            """INSERT INTO parse_cache(ml_path, sig, entries_json, header_json, raw_text, method)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(ml_path) DO UPDATE SET sig=excluded.sig, entries_json=excluded.entries_json,
+                 header_json=excluded.header_json, raw_text=excluded.raw_text, method=excluded.method""",
+            (ml_path, sig, json.dumps(parsed["entries"], ensure_ascii=False),
+             json.dumps(parsed["header"], ensure_ascii=False),
+             parsed["raw_text"][:60000], parsed["method"]))
     return parsed
 
 
@@ -167,50 +194,55 @@ def scan_volume(conn, folder: str, log, root=None):
             else:
                 row["parse_error"] = "ML 解析不出条目（可能是空目录或版式特殊）"
                 log(f"  [warn] {folder_name}: {row['parse_error']}")
+        except (OSError, sqlite3.Error):
+            raise  # 文件暂不可读/数据库写入失败时保留上一版完整索引。
         except Exception as ex:
             row["parse_error"] = f"{type(ex).__name__}: {ex}"
             log(f"  [fail] {folder_name}: {row['parse_error']}")
 
-    old = conn.execute("SELECT id FROM volumes WHERE folder_path=?", (folder,)).fetchone()
-    if old:
-        conn.execute("DELETE FROM volumes WHERE id=?", (old["id"],))
-    cur = conn.execute(
-        """INSERT INTO volumes(folder_path,folder_name,code,title,date_tag,rev_tag,
-           project,volume_ref_no,ml_file,scan_root,parse_status,parse_method,parse_error,
-           ml_raw_text,scanned_at)
-           VALUES(:folder_path,:folder_name,:code,:title,:date_tag,:rev_tag,
-           :project,:volume_ref_no,:ml_file,:scan_root,:parse_status,:parse_method,:parse_error,
-           :ml_raw_text,:scanned_at)""", row)
-    vid = cur.lastrowid
-    entry_rows = []
-    for e in entries:
-        c = conn.execute(
-            """INSERT INTO entries(volume_id,seq,drawing_no,title,rev,page,remark,raw_text)
-               VALUES(?,?,?,?,?,?,?,?)""",
-            (vid, e.get("seq"), e["drawing_no"], e.get("title"), e.get("rev"),
-             e.get("page"), e.get("remark"), None))
-        entry_rows.append({"_id": c.lastrowid, "drawing_no": e["drawing_no"]})
+    entry_rows = [dict(e, _id=i) for i, e in enumerate(entries)]
     files_rows = []
     for n in other_files:
         p = os.path.join(folder, n)
         try:
             st = os.stat(p)
-        except OSError:
+        except FileNotFoundError:
             continue
         files_rows.append({"filename": n, "path": p, "ext": Path(n).suffix.lower(),
                            "size": st.st_size, "mtime": st.st_mtime,
                            "matched_entry_id": None})
     _match_files_to_entries(entry_rows, files_rows)
-    for e in entry_rows:
-        if e.pop("_healed", False):
-            conn.execute("UPDATE entries SET drawing_no=? WHERE id=?",
-                         (e["drawing_no"], e["_id"]))
-    for f in files_rows:
-        conn.execute(
-            """INSERT INTO files(volume_id,filename,path,ext,size,mtime,matched_entry_id)
-               VALUES(?,?,?,?,?,?,?)""",
-            (vid, f["filename"], f["path"], f["ext"], f["size"], f["mtime"],
-             f["matched_entry_id"]))
+    os.listdir(folder)  # 解析期间若目录掉线，终止本册更新，保留旧索引。
+    with conn:  # 文件读取及匹配已完成；替换整册索引的短事务，失败整册回滚。
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM ignored_volumes WHERE folder_path=?", (folder,)).fetchone():
+            log(f"  [skip] {folder_name}: 解析期间已手动移除，保留移除状态")
+            return None
+        old = conn.execute("SELECT id FROM volumes WHERE folder_path=?", (folder,)).fetchone()
+        if old:
+            conn.execute("DELETE FROM volumes WHERE id=?", (old["id"],))
+        cur = conn.execute(
+            """INSERT INTO volumes(folder_path,folder_name,code,title,date_tag,rev_tag,
+               project,volume_ref_no,ml_file,scan_root,parse_status,parse_method,parse_error,
+               ml_raw_text,scanned_at)
+               VALUES(:folder_path,:folder_name,:code,:title,:date_tag,:rev_tag,
+               :project,:volume_ref_no,:ml_file,:scan_root,:parse_status,:parse_method,:parse_error,
+               :ml_raw_text,:scanned_at)""", row)
+        vid = cur.lastrowid
+        entry_ids = {}
+        for e in entry_rows:
+            c = conn.execute(
+                """INSERT INTO entries(volume_id,seq,drawing_no,title,rev,page,remark,raw_text)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (vid, e.get("seq"), e["drawing_no"], e.get("title"), e.get("rev"),
+                 e.get("page"), e.get("remark"), None))
+            entry_ids[e["_id"]] = c.lastrowid
+        for f in files_rows:
+            conn.execute(
+                """INSERT INTO files(volume_id,filename,path,ext,size,mtime,matched_entry_id)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (vid, f["filename"], f["path"], f["ext"], f["size"], f["mtime"],
+                 entry_ids.get(f["matched_entry_id"])))
     unmatched = [f["filename"] for f in files_rows if f["matched_entry_id"] is None
                  and not is_ml_file(f["filename"])]
     return {"folder": folder, "status": row["parse_status"],
@@ -219,13 +251,51 @@ def scan_volume(conn, folder: str, log, root=None):
             "unmatched": unmatched}
 
 
-def purge_missing_volumes(conn):
-    """删掉磁盘上已不存在的册记录（文件夹被移动/删除后索引自动跟上现实）。"""
+def purge_missing_volumes(conn, root: str):
+    """完整重扫后，只清理当前来源下能够确认删除的子目录。
+
+    目录暂时掉线/无权限时保留索引；旧数据中没有来源的册也不自动删除。
+    缺失目录须在仍可枚举的上级目录中确认不存在，不能仅凭 isdir=False。
+    """
+    root = os.path.abspath(root)
+    try:
+        with os.scandir(root):
+            pass
+    except OSError:
+        return []
+
+    def confirmed_missing(folder):
+        folder = os.path.abspath(folder)
+        try:
+            if os.path.commonpath([root, folder]) != root:
+                return False
+            os.stat(folder)
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError):
+            return False
+        else:
+            return False
+        # 允许确认整个子目录树被移走；只向当前根目录内的祖先检查。
+        candidate = folder
+        while candidate != root:
+            parent = os.path.dirname(candidate)
+            try:
+                with os.scandir(parent) as children:
+                    name = os.path.normcase(os.path.basename(candidate))
+                    return all(os.path.normcase(child.name) != name for child in children)
+            except FileNotFoundError:
+                candidate = parent
+            except OSError:
+                return False
+        return False
+
     gone = [r["folder_path"] for r in conn.execute(
-        "SELECT folder_path FROM volumes").fetchall()
-        if not os.path.isdir(r["folder_path"])]
-    for g in gone:
-        conn.execute("DELETE FROM volumes WHERE folder_path=?", (g,))
+        "SELECT folder_path FROM volumes WHERE scan_root=?", (root,)).fetchall()
+        if confirmed_missing(r["folder_path"])]
+    with conn:
+        for g in gone:
+            conn.execute("DELETE FROM volumes WHERE folder_path=?", (g,))
     return gone
 
 
@@ -239,7 +309,13 @@ def scan_root(root: str, log=print, should_stop=None):
               "unmatched": []}
     log(f"开始扫描: {root}")
     targets = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    walk_errors = []
+
+    def walk_error(ex):
+        walk_errors.append(ex)
+        log(f"  [warn] 目录暂不可读取，保留已有索引: {ex}")
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=walk_error):
         dirnames[:] = [d for d in dirnames if not d.startswith((".", "$"))
                        and d not in ("System Volume Information",)]
         if any(is_ml_file(f) for f in filenames):
@@ -247,7 +323,7 @@ def scan_root(root: str, log=print, should_stop=None):
             dirnames[:] = []  # 册内不再嵌套找册
     report["found"] = len(targets)
     log(f"发现 {len(targets)} 个含 -ML 目录文件的文件夹")
-    with db.connect() as conn:
+    with closing(db.connect()) as conn:
         ignored = {r["folder_path"] for r in
                    conn.execute("SELECT folder_path FROM ignored_volumes").fetchall()}
         for folder in sorted(targets):
@@ -265,6 +341,8 @@ def scan_root(root: str, log=print, should_stop=None):
                      "unmatched": [], "reason": f"{type(ex).__name__}: {ex}",
                      "ml_file": None}
                 log(f"  [fail] {folder}: {v['reason']}")
+            if v is None:  # 解析期间被手动移除，不重新入库。
+                continue
             report["volumes"].append(v)
             report["total_entries"] += v.get("entries", 0)
             report["unmatched"].extend(v.get("unmatched", []))
@@ -274,13 +352,16 @@ def scan_root(root: str, log=print, should_stop=None):
                 report["fail"] += 1
             else:
                 report["warn"] += 1
-        # 旧数据回填：本根目录下尚未记录来源的册补上 scan_root
-        for r in conn.execute(
-                "SELECT id, folder_path FROM volumes WHERE scan_root IS NULL").fetchall():
-            if r["folder_path"].startswith(root + os.sep):
-                conn.execute("UPDATE volumes SET scan_root=? WHERE id=?", (root, r["id"]))
-        # 清理磁盘上已不存在的册（不限当前根目录，索引始终反映磁盘现状）
-        gone = purge_missing_volumes(conn)
+        with conn:
+            # 旧数据回填：本根目录下尚未记录来源的册补上 scan_root。
+            for r in conn.execute(
+                    "SELECT id, folder_path FROM volumes WHERE scan_root IS NULL").fetchall():
+                if r["folder_path"].startswith(root + os.sep):
+                    conn.execute("UPDATE volumes SET scan_root=? WHERE id=?", (root, r["id"]))
+        # 停止或遍历不完整时保留未检查的册；文件系统检查在写事务外完成。
+        gone = []
+        if not report.get("stopped") and not walk_errors:
+            gone = purge_missing_volumes(conn, root)
         report["removed_missing"] = len(gone)
         for g in gone:
             log(f"  [清理] {g} 文件夹已不存在，移出索引")

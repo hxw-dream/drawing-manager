@@ -127,9 +127,22 @@ function bindActionButtons() {
 }
 
 let lastData = null;
+let lastProject = null;
+let lastQuery = null;
+let searchSerial = 0;
+let pendingSearch = null;
+
+function clearSearch() {
+  searchSerial++;
+  if (pendingSearch) pendingSearch.abort();
+  pendingSearch = null;
+  lastData = null;
+  lastProject = lastQuery = null;
+  $("#sortbar").style.display = "none";
+}
 
 function renderResults() {
-  if (!lastData) return;
+  if (!lastData || lastProject !== dmCurrentProject() || lastQuery !== $("#q").value.trim()) return;
   const groups = sortedGroups(lastData.entry_groups);
   $("#sortbar").style.display = groups.length ? "flex" : "none";
   const html = renderEntryGroups(groups) + renderVolumes(lastData.volume_hits) + renderLooseFiles(lastData.loose_files);
@@ -139,14 +152,34 @@ function renderResults() {
 
 async function doSearch() {
   const q = $("#q").value.trim();
+  const project = dmCurrentProject();
   const box = $("#results");
+  clearSearch();
+  const serial = searchSerial;
   if (!q) { box.innerHTML = `<div class="empty">请输入关键字。</div>`; return; }
+  const controller = new AbortController();
+  pendingSearch = controller;
   box.innerHTML = `<div class="empty">搜索中…</div>`;
   try {
-    lastData = await api(`/api/search?q=${encodeURIComponent(q)}&project=${dmCurrentProject()}`);
+    const data = await api(`/api/search?q=${encodeURIComponent(q)}&project=${project}`,
+                           { signal: controller.signal });
+    if (serial !== searchSerial || project !== dmCurrentProject() || q !== $("#q").value.trim()) return;
+    lastData = data;
+    lastProject = project;
+    lastQuery = q;
     renderResults();
-  } catch (e) { box.innerHTML = `<div class="empty">搜索出错: ${esc(e.message)}</div>`; }
+  } catch (e) {
+    if (serial === searchSerial && e.name !== "AbortError")
+      box.innerHTML = `<div class="empty">搜索出错: ${esc(e.message)}</div>`;
+  } finally {
+    if (serial === searchSerial) pendingSearch = null;
+  }
 }
+
+document.addEventListener("dmprojectchange", () => {
+  clearSearch();
+  $("#results").innerHTML = `<div class="empty">请输入关键字搜索当前项目。</div>`;
+});
 
 /* ---------- 扫描 ---------- */
 let pollTimer = null;
@@ -230,6 +263,10 @@ async function startScan() {
 document.addEventListener("DOMContentLoaded", () => {
   $("#searchBtn").onclick = doSearch;
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+  $("#q").addEventListener("input", () => {
+    clearSearch();
+    $("#results").innerHTML = `<div class="empty">输入关键字后点击搜索。</div>`;
+  });
 
   /* 排序控件 */
   $("#sortKey").value = sortKey;
@@ -259,7 +296,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }).catch(() => {});
 });
 
-window.dmLoadSearch = function () { if (lastData) renderResults(); };
+window.dmLoadSearch = function () {
+  if (lastData && lastProject === dmCurrentProject() && lastQuery === $("#q").value.trim())
+    renderResults();
+  else if ($("#q").value.trim()) return doSearch();
+};
 
 window.dmLoadScan = function () {
   api("/api/scan/status").then(st => {

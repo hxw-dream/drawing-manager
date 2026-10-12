@@ -1,3 +1,4 @@
 pytest
 httpx
 ruff
+pytest-playwright

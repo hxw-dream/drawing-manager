@@ -56,7 +56,24 @@
 2. 搜索框输入关键字（图号 / 图名 / 册名 / 文件名 / 工程名，支持中英文）
 3. 结果按图号分组、版本新在前；点「打开所在文件夹」在资源管理器中定位文件
 
+图纸库暂时掉线或无权限时保留已有索引。仅在完整重扫一个可访问的根目录后，
+清理该来源下确认已删除的子册；查看列表、搜索和清册不会自动删除索引。
+
 ## 数据位置
 
 - 索引库：`data/index.db`（SQLite）
 - 上次扫描根目录：`data/config.json`
+
+## 开发检查
+
+在虚拟环境中安装开发依赖和测试浏览器，再运行回归测试：
+
+```bash
+python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m playwright install chromium
+python -m pytest tests -q
+python -m ruff check app tests
+```
+
+浏览器测试覆盖恢复操作、项目切换及搜索请求乱序。已安装 Chromium 时，
+也可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 指定浏览器路径。
